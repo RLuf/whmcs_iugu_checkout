@@ -1,0 +1,178 @@
+/**
+ * WHMCS Iugu Credit Card Checkout Styles (`iugucc.css`)
+ * Compatible with WHMCS 8.13.7 Twenty-One, Six, and custom Bootstrap themes.
+ */
+
+.iugucc-checkout-wrapper {
+    max-width: 480px;
+    margin: 18px auto;
+    padding: 24px;
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    box-shadow: 0 4px 16px rgba(15, 23, 42, 0.06);
+    text-align: left;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    color: #1e293b;
+}
+
+.iugucc-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 16px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid #f1f5f9;
+}
+
+.iugucc-title {
+    margin: 0;
+    font-size: 18px;
+    font-weight: 700;
+    color: #0f172a;
+}
+
+.iugucc-subtitle {
+    margin: 4px 0 0 0;
+    font-size: 12px;
+    color: #64748b;
+}
+
+.iugucc-brand-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 4px 10px;
+    font-size: 12px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    border-radius: 6px;
+    background: #f1f5f9;
+    color: #334155;
+    border: 1px solid #cbd5e1;
+}
+
+.iugucc-sandbox-banner {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 16px;
+    padding: 8px 12px;
+    background: #fffbeb;
+    border: 1px solid #fde68a;
+    border-radius: 8px;
+    color: #92400e;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.iugucc-alert {
+    display: none;
+    margin-bottom: 16px;
+    padding: 12px 14px;
+    border-radius: 8px;
+    font-size: 13px;
+    line-height: 1.45;
+}
+
+.iugucc-alert.is-visible {
+    display: block;
+}
+
+.iugucc-alert-error {
+    background: #fef2f2;
+    border: 1px solid #fecaca;
+    color: #991b1b;
+}
+
+.iugucc-alert-success {
+    background: #f0fdf4;
+    border: 1px solid #bbf7d0;
+    color: #166534;
+}
+
+.iugucc-field-group {
+    margin-bottom: 14px;
+}
+
+.iugucc-row {
+    display: flex;
+    gap: 12px;
+}
+
+.iugucc-col-half {
+    flex: 1 1 50%;
+}
+
+.iugucc-label {
+    display: block;
+    margin-bottom: 6px;
+    font-size: 13px;
+    font-weight: 600;
+    color: #334155;
+}
+
+.iugucc-input,
+.iugucc-select {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 10px 12px;
+    font-size: 14px;
+    line-height: 1.4;
+    color: #0f172a;
+    background-color: #f8fafc;
+    border: 1px solid #cbd5e1;
+    border-radius: 8px;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease;
+}
+
+.iugucc-input:focus,
+.iugucc-select:focus {
+    outline: none;
+    background-color: #ffffff;
+    border-color: #2563eb;
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
+}
+
+.iugucc-input.is-invalid {
+    border-color: #dc2626;
+    background-color: #fff5f5;
+}
+
+.iugucc-submit-btn {
+    width: 100%;
+    margin-top: 8px;
+    padding: 13px 18px;
+    font-size: 15px;
+    font-weight: 700;
+    color: #ffffff;
+    background: linear-gradient(135deg, #16a34a 0%, #15803d 100%);
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: opacity 0.15s ease, transform 0.1s ease;
+}
+
+.iugucc-submit-btn:hover:not(:disabled) {
+    opacity: 0.95;
+}
+
+.iugucc-submit-btn:active:not(:disabled) {
+    transform: translateY(1px);
+}
+
+.iugucc-submit-btn:disabled {
+    opacity: 0.65;
+    cursor: not-allowed;
+}
+
+.iugucc-security-footer {
+    margin-top: 14px;
+    padding-top: 12px;
+    border-top: 1px solid #f1f5f9;
+    font-size: 11px;
+    color: #64748b;
+    text-align: center;
+    line-height: 1.4;
+}

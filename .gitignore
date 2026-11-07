@@ -1,0 +1,26 @@
+# Mandatory Archive & Backup Directory (Never Commit Backups)
+archived/
+/archived/
+
+# Agent / Workspace Ephemeral State
+.agents/
+CHECKPOINT.md
+
+# Composer & Dependencies
+/vendor/
+composer.lock
+
+# Environment & Secrets (Never Commit Private Credentials)
+.env
+.env.*
+*.pem
+*.key
+
+# OS & IDE Files
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.swo
+*.log

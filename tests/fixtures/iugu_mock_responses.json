@@ -1,0 +1,135 @@
+{
+    "sandbox_cards": {
+        "visa_approved": {
+            "number": "4111 1111 1111 1111",
+            "cvv": "123",
+            "expiration": "12/2030",
+            "holder": "JOAO SILVA",
+            "expected_brand": "VISA",
+            "expected_luhn": true
+        },
+        "mastercard_approved": {
+            "number": "5555 5555 5555 4444",
+            "cvv": "123",
+            "expiration": "12/2030",
+            "holder": "MARIA SOUZA",
+            "expected_brand": "MASTERCARD",
+            "expected_luhn": true
+        },
+        "amex_approved": {
+            "number": "3782 822463 10005",
+            "cvv": "1234",
+            "expiration": "10/2029",
+            "holder": "CARLOS PEREIRA",
+            "expected_brand": "AMEX",
+            "expected_luhn": true
+        },
+        "invalid_luhn": {
+            "number": "4111 1111 1111 1112",
+            "cvv": "123",
+            "expiration": "12/2030",
+            "holder": "TESTE INVALIDO",
+            "expected_brand": "VISA",
+            "expected_luhn": false
+        }
+    },
+    "charge_responses": {
+        "approved_lr00": {
+            "http_code": 200,
+            "body": {
+                "message": "Autorizado",
+                "errors": {},
+                "success": true,
+                "url": "https://faturas.iugu.com/test-invoice-1024",
+                "pdf": "https://faturas.iugu.com/test-invoice-1024.pdf",
+                "identification": null,
+                "invoice_id": "IUGU_INV_99887766554433221100AABB",
+                "LR": "00"
+            }
+        },
+        "declined_insufficient_funds_lr51": {
+            "http_code": 200,
+            "body": {
+                "message": "Não autorizado",
+                "errors": {},
+                "success": false,
+                "invoice_id": "IUGU_INV_DECLINED_51",
+                "LR": "51"
+            }
+        },
+        "declined_expired_card_lr54": {
+            "http_code": 200,
+            "body": {
+                "message": "Cartão vencido",
+                "errors": {},
+                "success": false,
+                "invoice_id": "IUGU_INV_DECLINED_54",
+                "LR": "54"
+            }
+        },
+        "declined_invalid_cvv_lr82": {
+            "http_code": 200,
+            "body": {
+                "message": "Transação não autorizada",
+                "errors": {},
+                "success": false,
+                "invoice_id": "IUGU_INV_DECLINED_82",
+                "LR": "82"
+            }
+        },
+        "validation_error_422": {
+            "http_code": 422,
+            "body": {
+                "success": false,
+                "errors": {
+                    "token": ["não é válido ou já foi utilizado"]
+                }
+            }
+        }
+    },
+    "invoice_details": {
+        "IUGU_INV_99887766554433221100AABB": {
+            "http_code": 200,
+            "body": {
+                "id": "IUGU_INV_99887766554433221100AABB",
+                "status": "paid",
+                "total_cents": 15000,
+                "total_paid_cents": 15000,
+                "taxes_paid_cents": 449,
+                "order_id": "whmcs_1024",
+                "custom_variables": [
+                    {
+                        "name": "whmcs_invoice_id",
+                        "value": "1024"
+                    },
+                    {
+                        "name": "whmcs_client_id",
+                        "value": "42"
+                    },
+                    {
+                        "name": "integration_module",
+                        "value": "iugucc"
+                    }
+                ]
+            }
+        }
+    },
+    "webhooks": {
+        "invoice_paid": {
+            "event": "invoice.status_changed",
+            "data": {
+                "id": "IUGU_INV_99887766554433221100AABB",
+                "status": "paid",
+                "account_id": "A1B2C3D4E5F60718293A4B5C6D7E8F90"
+            }
+        },
+        "invoice_refunded": {
+            "event": "invoice.refund",
+            "data": {
+                "id": "IUGU_INV_99887766554433221100AABB",
+                "status": "refunded",
+                "account_id": "A1B2C3D4E5F60718293A4B5C6D7E8F90"
+            }
+        }
+    }
+}

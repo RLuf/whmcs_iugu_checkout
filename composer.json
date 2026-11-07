@@ -1,0 +1,29 @@
+{
+    "name": "rluf/whmcs-iugu-checkout",
+    "description": "Commercial-ready WHMCS 8.13.7 Credit Card Payment Gateway Module with Iugu.js client-side tokenization and webhook provisioning",
+    "version": "1.0.0",
+    "type": "whmcs-gateway",
+    "license": "MIT",
+    "authors": [
+        {
+            "name": "RLuf / ImovelSite",
+            "homepage": "https://imovelsite.com.br"
+        }
+    ],
+    "require": {
+        "php": "^8.1 || ^8.2",
+        "ext-curl": "*",
+        "ext-json": "*"
+    },
+    "autoload": {
+        "psr-4": {
+            "WHMCS\\Module\\Gateway\\IuguCC\\": "modules/gateways/iugucc/lib/"
+        }
+    },
+    "scripts": {
+        "test": "node tests/run_tests.js",
+        "bump:patch": "node scripts/bump-version.js patch",
+        "bump:minor": "node scripts/bump-version.js minor",
+        "bump:major": "node scripts/bump-version.js major"
+    }
+}
