@@ -5,6 +5,30 @@ O formato é baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.
 
 ---
 
+## [1.1.0] - 2026-11-08
+
+### Added (Adicionado)
+- **Agente Sentinela & AutoSetup (`SentinelAuditor` & `scripts/sentinel-autosetup.php`)**:
+  - Utilitário de Snapshot Consistente ("No-Hot") em `archived/snapshots/snapshot_<ts>.json` com hash SHA-256 de todos os arquivos do módulo.
+  - Watchdog de Instalação validando compatibilidade PHP 8.1/8.2, extensões (`curl`, `json`, `mbstring`, `openssl`) e handshake opcional sem custo na API da Iugu (`GET /v1/invoices?limit=1`).
+  - Modo Sentinela Chaveável (`sentinelMode`) na configuração do WHMCS Admin, enriquecendo o Gateway Log com `trace_id` e dicas de ação (`support_action_hint`) por código LR da adquirente sem expor dados sensíveis ao cliente final.
+- **Prontidão Comercial WHMCS Marketplace (`whmcs.json` & `logo.svg`)**:
+  - Manifesto oficial `modules/gateways/iugucc/whmcs.json` (Schema 1.0) e logotipo vetorial `logo.svg` para publicação e distribuição comercial no WHMCS Marketplace.
+- **Manifesto de Mapeamento de Esquemas (`/schema-mapping`)**:
+  - Documentação formal completa em `docs/SCHEMA_MAPPING.md` e `docs/SENTINEL_AUTOSETUP.md`.
+- **CI/CD, Bump de Versão Automatizado e Gate de Revisão Jules**:
+  - Workflows `.github/workflows/ci-and-jules-review.yml` e `.github/workflows/version-bump.yml`.
+
+### Fixed / Improved (Revisão de Código)
+- **Validação Mod-11 de CPF/CNPJ e Priorização de Custom Field (`PayloadBuilder.php`)**:
+  - Prioriza o campo personalizado com o nome configurado (`cpfCustomField`) e valida dígitos verificadores Mod-11, evitando que números de celular brasileiros de 11 dígitos (`DDD + 9 dígitos`) em outros custom fields sejam confundidos com CPF.
+- **Verificação de Assinatura HMAC para Faturas com Crédito ou Pagamento Parcial (`callback/iugucc.php`)**:
+  - Calcula o saldo remanescente real (`total - SUM(amountin - amountout)`) em `tblaccounts` e valida a assinatura HMAC-SHA256 tanto para o saldo parcial quanto para o valor cheio da fatura.
+- **Sincronização Completa no `scripts/bump-version.js`**:
+  - Atualiza automaticamente `VERSION`, `composer.json`, `modules/gateways/iugucc.php`, `modules/gateways/iugucc/whmcs.json`, `IuguHttpClient.php` (`User-Agent`) e `checkout.php` (`?v=`).
+
+---
+
 ## [1.0.0] - 2026-11-07
 
 ### Added (Adicionado)

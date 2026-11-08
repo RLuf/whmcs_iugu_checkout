@@ -126,8 +126,24 @@ if ($action === 'checkout' || isset($requestData['iugu_token'])) {
     $invoiceTotal = (string) ($invoiceRow->total ?? '0.00');
     $providedSignature = trim((string) ($requestData['signature'] ?? ''));
 
-    // Verify HMAC-SHA256 checkout signature
-    if (!$config->verifyCheckoutSignature($invoiceId, $clientId, $invoiceTotal, $providedSignature)) {
+    // Compute remaining balance in case the invoice has partial credit or prior partial payments
+    $paidSum = 0.0;
+    if (class_exists(Capsule::class)) {
+        $paidIn = (float) Capsule::table('tblaccounts')->where('invoiceid', $invoiceId)->sum('amountin');
+        $paidOut = (float) Capsule::table('tblaccounts')->where('invoiceid', $invoiceId)->sum('amountout');
+        $paidSum = max(0.0, $paidIn - $paidOut);
+    }
+    $calculatedBalance = number_format(max(0.0, ((float) $invoiceTotal) - $paidSum), 2, '.', '');
+
+    // Verify HMAC-SHA256 checkout signature against authoritative balance or total
+    $verifiedAmount = null;
+    if ($config->verifyCheckoutSignature($invoiceId, $clientId, $calculatedBalance, $providedSignature)) {
+        $verifiedAmount = (float) $calculatedBalance;
+    } elseif ($config->verifyCheckoutSignature($invoiceId, $clientId, $invoiceTotal, $providedSignature)) {
+        $verifiedAmount = (float) $invoiceTotal;
+    }
+
+    if ($verifiedAmount === null) {
         http_response_code(403);
         echo json_encode([
             'success' => false,
@@ -145,7 +161,7 @@ if ($action === 'checkout' || isset($requestData['iugu_token'])) {
     $result = $processor->processCharge(
         $requestData,
         $invoiceId,
-        (float) $invoiceTotal,
+        $verifiedAmount,
         $clientRow,
         $whmcsCallbacks
     );

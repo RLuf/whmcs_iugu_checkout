@@ -1,6 +1,6 @@
 # WHMCS Iugu Credit Card Checkout Gateway (`iugucc`)
 
-[![Version](https://img.shields.io/badge/version-1.0.0-blue.svg)](./VERSION)
+[![Version](https://img.shields.io/badge/version-1.1.0-blue.svg)](./VERSION)
 [![WHMCS](https://img.shields.io/badge/WHMCS-8.13.7-success.svg)](https://www.whmcs.com/)
 [![PHP](https://img.shields.io/badge/PHP-8.1%20%7C%208.2-777bb4.svg)](https://www.php.net/)
 [![PCI-DSS](https://img.shields.io/badge/PCI--DSS-Client--Side%20Tokenized-brightgreen.svg)](https://dev.iugu.com/)
@@ -115,6 +115,8 @@ Consulte os manuais detalhados em:
 - [Guia Completo de Instalação no WHMCS 8.13.7](./docs/INSTALLATION_WHMCS.md)
 - [Arquitetura e Segurança PCI-DSS](./docs/ARCHITECTURE.md)
 - [Guia de Testes em Modo Sandbox](./docs/SANDBOX_TESTING.md)
+- [Manifesto de Mapeamento de Esquemas (WHMCS ↔ Iugu ↔ Sentinela)](./docs/SCHEMA_MAPPING.md)
+- [Agente Sentinela & AutoSetup (Snapshot No-Hot, Watchdog & Prontidão Comercial)](./docs/SENTINEL_AUTOSETUP.md)
 
 ---
 

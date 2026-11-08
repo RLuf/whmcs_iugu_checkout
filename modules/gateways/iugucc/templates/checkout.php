@@ -24,7 +24,7 @@ declare(strict_types=1);
 
 $esc = static fn(string $val): string => htmlspecialchars($val, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
 ?>
-<link rel="stylesheet" href="<?= $esc($assetBaseUrl) ?>/assets/css/iugucc.css?v=1.0.0">
+<link rel="stylesheet" href="<?= $esc($assetBaseUrl) ?>/assets/css/iugucc.css?v=1.1.0">
 
 <div class="iugucc-checkout-wrapper" id="iugucc-checkout-container">
     <div class="iugucc-header">
@@ -155,7 +155,7 @@ $esc = static fn(string $val): string => htmlspecialchars($val, ENT_QUOTES | ENT
 </div>
 
 <script src="<?= $esc($iuguJsUrl) ?>"></script>
-<script src="<?= $esc($assetBaseUrl) ?>/assets/js/iugucc.js?v=1.0.0"></script>
+<script src="<?= $esc($assetBaseUrl) ?>/assets/js/iugucc.js?v=1.1.0"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function () {
     if (window.IuguCCCheckout && typeof window.IuguCCCheckout.initCheckoutForm === 'function') {

@@ -110,7 +110,7 @@ final class IuguHttpClient
             'Authorization: ' . $authHeader,
             'Accept: application/json',
             'Content-Type: application/json; charset=utf-8',
-            'User-Agent: WHMCS-IuguCC-Gateway/1.0.0 (WHMCS 8.13.7; PHP ' . PHP_VERSION . ')',
+            'User-Agent: WHMCS-IuguCC-Gateway/1.1.0 (WHMCS 8.13.7; PHP ' . PHP_VERSION . ')',
         ];
 
         $jsonBody = null;

@@ -15,7 +15,7 @@
  * @author     RLuf / ImovelSite <https://imovelsite.com.br>
  * @copyright  2026 ImovelSite
  * @license    MIT
- * @version    1.0.0
+ * @version    1.1.0
  */
 
 declare(strict_types=1);
@@ -25,7 +25,7 @@ if (!defined('WHMCS')) {
 }
 
 if (!defined('IUGUCC_MODULE_VERSION')) {
-    define('IUGUCC_MODULE_VERSION', '1.0.0');
+    define('IUGUCC_MODULE_VERSION', '1.1.0');
 }
 
 require_once __DIR__ . '/iugucc/autoload.php';
@@ -147,6 +147,12 @@ function iugucc_config(): array
             'FriendlyName' => 'Log Detalhado no WHMCS (PCI-Safe)',
             'Type' => 'yesno',
             'Description' => 'Registra payloads sanitizados (sem dados sensíveis de cartão) em Billing > Gateway Log.',
+        ],
+        'sentinelMode' => [
+            'FriendlyName' => 'Agente Sentinela & Diagnóstico E2E',
+            'Type' => 'yesno',
+            'Default' => 'yes',
+            'Description' => 'Ativa rastreamento E2E, trace_id de auditoria e dicas de resolução de códigos LR para o suporte técnico no Gateway Log.',
         ],
     ];
 }

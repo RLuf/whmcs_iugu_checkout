@@ -1,0 +1,35 @@
+{
+    "schema": "1.0",
+    "type": "whmcs-gateways",
+    "name": "iugucc",
+    "version": "1.1.0",
+    "license": "MIT",
+    "category": "payments",
+    "description": {
+        "name": "Iugu - Cartão de Crédito (Checkout Transparente)",
+        "tagline": "Checkout transparente de cartão de crédito via Iugu.js v2 (PCI-DSS SAQ A) com baixa síncrona, webhooks idempotentes e Sentinela E2E.",
+        "long": "Módulo comercial de gateway de pagamento para WHMCS 8.13.7 (PHP 8.1/8.2) integrado à API REST v1 da Iugu. Processa pagamentos por cartão de crédito com tokenização client-side (Iugu.js v2), parcelamento configurável em até 12x, estorno nativo pelo painel Admin, confirmação imediata de faturas (addInvoicePayment) para provisionamento automático de serviços (imovelsite.com.br), webhooks autenticados e Agente Sentinela de auditoria e diagnóstico.",
+        "features": [
+            "Tokenização Client-Side via Iugu.js v2 (Conformidade PCI-DSS SAQ A)",
+            "Isolamento Total (identificador exclusivo iugucc sem interferência em módulos de boleto existentes)",
+            "Baixa Síncrona Imediata (addInvoicePayment) + Webhook Assíncrono Idempotente",
+            "Suporte a Parcelamento Configurável (1x a 12x) com Valor Mínimo de Parcela",
+            "Estorno Total e Parcial Direto pelo Painel Admin do WHMCS (iugucc_refund)",
+            "Agente Sentinela Toggleable com Diagnóstico LR para Suporte e Mensagens Amigáveis ao Cliente"
+        ]
+    },
+    "logo": {
+        "filename": "logo.svg"
+    },
+    "support": {
+        "homepage": "https://imovelsite.com.br",
+        "docs_url": "https://github.com/RLuf/whmcs_iugu_checkout/tree/main/docs",
+        "support_url": "https://github.com/RLuf/whmcs_iugu_checkout/issues"
+    },
+    "authors": [
+        {
+            "name": "RLuf / ImovelSite",
+            "homepage": "https://imovelsite.com.br"
+        }
+    ]
+}

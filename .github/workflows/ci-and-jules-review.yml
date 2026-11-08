@@ -1,0 +1,76 @@
+name: CI Verification & Jules PR Review
+
+on:
+  push:
+    branches: [ main, feat/**, release/** ]
+  pull_request:
+    branches: [ main ]
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+
+jobs:
+  verify-gateway-and-sentinel:
+    name: WHMCS 8.13.7 (PHP 8.1/8.2) & Sentinel Test Suite
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        php-version: ['8.1', '8.2']
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup PHP ${{ matrix.php-version }}
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php-version }}
+          extensions: curl, json, mbstring, openssl
+
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Lint all PHP files (Strict Syntax Check)
+        run: |
+          find modules scripts tests -name "*.php" -print0 | xargs -0 -n1 php -l
+
+      - name: Run Core & Adversarial Test Suites
+        run: |
+          node tests/run_tests.js
+          node tests/adversarial_suite.js
+          node tests/adversarial_webhook_test.js
+          php tests/phpunit_runner.php
+          php tests/adversarial_stress_test.php
+
+      - name: Run Sentinel AutoSetup & Watchdog Self-Check
+        run: |
+          php scripts/sentinel-autosetup.php
+
+  jules-pr-review-gate:
+    name: Request Jules Code Review on PR
+    if: github.event_name == 'pull_request'
+    needs: verify-gateway-and-sentinel
+    runs-on: ubuntu-latest
+    steps:
+      - name: Post Jules Review Trigger & Audit Summary on PR
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const body = [
+              '### 🤖 Automated Pre-Merge Audit & Jules Review Trigger',
+              '',
+              '@jules / @google-labs-jules please review this Pull Request for:',
+              '1. **PCI-DSS SAQ A Compliance**: Confirm raw card numbers (`number`, `verification_value`) never transit or log on the WHMCS server (`PciSanitizer`).',
+              '2. **WHMCS 8.13.7 & PHP 8.1/8.2 Strict Typing**: Verify `iugucc.php`, `callback/iugucc.php`, and `SentinelAuditor.php` strict types and Marketplace `whmcs.json` compliance.',
+              '3. **Non-Interference Guarantee**: Confirm zero impact on existing Edvan Iugu Boleto module (`iugucc` exclusive namespace).',
+              '4. **Schema Mapping & Idempotency**: Verify HMAC checkout signature against partial/full invoice balances and webhook idempotency (`checkCbTransID`).'
+            ].join('\n');
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body
+            });

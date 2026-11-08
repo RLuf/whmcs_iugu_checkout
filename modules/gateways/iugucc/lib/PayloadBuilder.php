@@ -161,31 +161,104 @@ final class PayloadBuilder
             }
         }
 
-        // 2. Inspect WHMCS customfields array
+        // 2. Inspect WHMCS customfields array (prioritize preferredFieldName match first, then Mod-11 valid, then length)
         if (!empty($client['customfields']) && is_array($client['customfields'])) {
+            $normalizedPref = strtolower(trim($preferredFieldName));
+            $fallbackCandidate = '';
+
             foreach ($client['customfields'] as $customField) {
                 if (!is_array($customField)) {
                     continue;
                 }
+                $fieldName = strtolower(trim((string) ($customField['name'] ?? $customField['fieldname'] ?? $customField['title'] ?? '')));
                 $val = self::digitsOnly((string) ($customField['value'] ?? ''));
-                if (strlen($val) === 11 || strlen($val) === 14) {
+                if (strlen($val) !== 11 && strlen($val) !== 14) {
+                    continue;
+                }
+                if ($normalizedPref !== '' && ($fieldName === $normalizedPref || str_contains($fieldName, 'cpf') || str_contains($fieldName, 'cnpj'))) {
                     return $val;
                 }
+                if (self::isValidCpfOrCnpj($val)) {
+                    return $val;
+                }
+                if ($fallbackCandidate === '') {
+                    $fallbackCandidate = $val;
+                }
+            }
+
+            if ($fallbackCandidate !== '') {
+                return $fallbackCandidate;
             }
         }
 
-        // 3. Inspect customfields1, customfields2...
+        // 3. Inspect customfields1, customfields2... (prefer Mod-11 valid CPF/CNPJ over 11-digit mobile phone numbers)
+        $fallbackIndexed = '';
         for ($i = 1; $i <= 10; $i++) {
             $key = 'customfields' . $i;
             if (isset($client[$key])) {
                 $val = self::digitsOnly((string) $client[$key]);
                 if (strlen($val) === 11 || strlen($val) === 14) {
-                    return $val;
+                    if (self::isValidCpfOrCnpj($val)) {
+                        return $val;
+                    }
+                    if ($fallbackIndexed === '') {
+                        $fallbackIndexed = $val;
+                    }
                 }
             }
         }
 
-        return '';
+        return $fallbackIndexed;
+    }
+
+    /**
+     * Validates Brazilian CPF (11 digits) or CNPJ (14 digits) using official Mod-11 checksums.
+     */
+    public static function isValidCpfOrCnpj(string $raw): bool
+    {
+        $digits = self::digitsOnly($raw);
+        if (strlen($digits) === 11) {
+            if (preg_match('/^(\d)\1{10}$/', $digits) === 1) {
+                return false;
+            }
+            for ($t = 9; $t < 11; $t++) {
+                $sum = 0;
+                for ($c = 0; $c < $t; $c++) {
+                    $sum += ((int) $digits[$c]) * (($t + 1) - $c);
+                }
+                $check = ((10 * $sum) % 11) % 10;
+                if (((int) $digits[$t]) !== $check) {
+                    return false;
+                }
+            }
+            return true;
+        }
+
+        if (strlen($digits) === 14) {
+            if (preg_match('/^(\d)\1{13}$/', $digits) === 1) {
+                return false;
+            }
+            $weights1 = [5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2];
+            $weights2 = [6, 5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2];
+            $sum1 = 0;
+            for ($i = 0; $i < 12; $i++) {
+                $sum1 += ((int) $digits[$i]) * $weights1[$i];
+            }
+            $rem1 = $sum1 % 11;
+            $d1 = $rem1 < 2 ? 0 : 11 - $rem1;
+            if (((int) $digits[12]) !== $d1) {
+                return false;
+            }
+            $sum2 = 0;
+            for ($i = 0; $i < 13; $i++) {
+                $sum2 += ((int) $digits[$i]) * $weights2[$i];
+            }
+            $rem2 = $sum2 % 11;
+            $d2 = $rem2 < 2 ? 0 : 11 - $rem2;
+            return ((int) $digits[13]) === $d2;
+        }
+
+        return false;
     }
 
     /**

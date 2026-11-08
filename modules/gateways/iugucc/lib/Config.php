@@ -27,6 +27,7 @@ final class Config
     private string $webhookSecret;
     private string $cpfCustomFieldName;
     private bool $debugLogging;
+    private bool $sentinelMode;
     private string $language;
 
     /**
@@ -50,6 +51,7 @@ final class Config
         $this->webhookSecret = trim((string) ($params['webhookSecret'] ?? ''));
         $this->cpfCustomFieldName = trim((string) ($params['cpfCustomField'] ?? 'CPF/CNPJ'));
         $this->debugLogging = $this->parseBool($params['debugLogging'] ?? true);
+        $this->sentinelMode = $this->parseBool($params['sentinelMode'] ?? true);
         $this->language = strtolower(trim((string) ($params['language'] ?? $params['clientdetails']['language'] ?? 'portuguese-br')));
     }
 
@@ -108,6 +110,11 @@ final class Config
     public function isDebugLoggingEnabled(): bool
     {
         return $this->debugLogging;
+    }
+
+    public function isSentinelModeEnabled(): bool
+    {
+        return $this->sentinelMode;
     }
 
     public function isEnglish(): bool
