@@ -5,6 +5,18 @@ O formato é baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.
 
 ---
 
+## [Unreleased] - 2026-11-09
+
+### Fixed (Corrigido)
+- **URL oficial do Iugu.js v2 (`Config::IUGU_JS_URL`)**: o módulo carregava a biblioteca de tokenização de `https://js.iugu.net/v2`, host que **não existe no DNS** (NXDOMAIN). Em produção o navegador nunca definiria `window.Iugu` e todo checkout falharia com "Biblioteca Iugu.js não carregada". Corrigido para `https://js.iugu.com/v2`, host oficial que serve o bundle com `setAccountID`, `setTestMode` e `createPaymentToken` (verificado em Chromium real via Playwright). Referências ajustadas em `iugucc.js`, `README.md`, `AGENTS.md` e `docs/ARCHITECTURE.md`.
+
+### Added (Adicionado)
+- **Testes de regressão (`tests/run_tests.js`)**: duas asserções garantem que `Config::IUGU_JS_URL` aponta para `js.iugu.com` e que nenhum fonte do módulo referencia `js.iugu.net`.
+- **Script de ambiente de nuvem (`scripts/cloud-env-setup.sh`)**: instala PHP 8.1 e 8.2 CLI (PPA ondrej/php) com `curl`, `json`, `mbstring` e `openssl`, cria `archived/`, executa lint estrito nas duas versões e o Sentinel AutoSetup (PHP + Node). Usado como *setup script* do ambiente Claude Code na nuvem para o papel de revisor/tester (ver `AGENTS.md`, seção 5).
+- **`.gitignore`**: padrões adicionais de histórico local (`archive/`, `arquivado*/`, `historico/`, `histórico/`, `_archive*/`).
+
+---
+
 ## [1.1.0] - 2026-11-08
 
 ### Added (Adicionado)

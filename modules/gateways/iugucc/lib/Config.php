@@ -14,7 +14,7 @@ final class Config
 {
     public const GATEWAY_NAME = 'iugucc';
     public const API_BASE_URL = 'https://api.iugu.com/v1';
-    public const IUGU_JS_URL  = 'https://js.iugu.net/v2';
+    public const IUGU_JS_URL  = 'https://js.iugu.com/v2';
 
     private string $accountId;
     private string $apiToken;

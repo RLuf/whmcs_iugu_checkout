@@ -1,7 +1,7 @@
 /**
  * WHMCS Iugu Credit Card Client-Side Tokenization Controller (`iugucc.js`)
  *
- * Uses official Iugu.js v2 (`https://js.iugu.net/v2`) to tokenize credit card details
+ * Uses official Iugu.js v2 (`https://js.iugu.com/v2`) to tokenize credit card details
  * directly in the customer's browser (PCI-DSS compliant).
  * Raw card numbers and CVVs are NEVER sent to the WHMCS server.
  */

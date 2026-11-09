@@ -1,6 +1,12 @@
 # Mandatory Archive & Backup Directory (Never Commit Backups)
+# historico local - nunca versionar
 archived/
 /archived/
+archive/
+arquivado*/
+historico/
+histórico/
+_archive*/
 
 # Agent / Workspace Ephemeral State
 .agents/

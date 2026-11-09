@@ -14,7 +14,7 @@
 Módulo comercial de gateway de pagamento via **Cartão de Crédito (Checkout Transparente)** para **WHMCS 8.13.7** (PHP 8.1 e 8.2), integrado à API REST v1 da **Iugu** e tokenização client-side via **Iugu.js v2**, desenvolvido para **imovelsite.com.br** (`https://www.webstorage.net.br/financeiro/master/`).
 
 ### Principais Recursos
-- **Conformidade PCI-DSS Total (Tokenização Client-Side):** Os dados sensíveis do cartão (`número` e `CVV`) são tokenizados diretamente no navegador do cliente via `https://js.iugu.net/v2` e **jamais** passam pelo servidor do WHMCS.
+- **Conformidade PCI-DSS Total (Tokenização Client-Side):** Os dados sensíveis do cartão (`número` e `CVV`) são tokenizados diretamente no navegador do cliente via `https://js.iugu.com/v2` e **jamais** passam pelo servidor do WHMCS.
 - **Baixa Automática Síncrona e Assíncrona (Webhook):**
   - **Retorno Síncrono:** Assim que a cobrança (`POST /v1/charge`) retorna `LR 00`, o módulo registra o pagamento imediatamente via `addInvoicePayment()`, deduzindo a taxa real da Iugu (`taxes_paid_cents`) e acionando a liberação/provisionamento automático do serviço contratado no WHMCS.
   - **Webhook Idempotente:** O endpoint `modules/gateways/callback/iugucc.php` recebe notificações `invoice.status_changed` da Iugu, confirma a autenticidade diretamente na API (`GET /v1/invoices/{id}`) e garante que nenhuma fatura receba baixa duplicada.
@@ -76,7 +76,7 @@ flowchart LR
 .
 ├── AGENTS.md                           # Regras obrigatórias de segurança e backup em archived/
 ├── CHANGELOG.md                        # Histórico de versões (SemVer)
-├── VERSION                             # Versão atual do módulo (1.0.0)
+├── VERSION                             # Versão atual do módulo (1.1.0)
 ├── composer.json                       # Metadados do pacote e scripts
 ├── archived/                           # Diretório local de backups (ignorado no .gitignore)
 ├── docs/
@@ -95,11 +95,31 @@ flowchart LR
 │           ├── lib/                    # Cliente HTTP Iugu, sanitizador PCI e processadores
 │           └── templates/              # Template HTML seguro do checkout
 ├── scripts/
-│   └── bump-version.js                 # Utilitário de bump semântico de versão
+│   ├── bump-version.js                 # Utilitário de bump semântico de versão
+│   ├── cloud-env-setup.sh              # Setup do ambiente de nuvem (PHP 8.1 + 8.2, lint, Sentinel)
+│   ├── sentinel-autosetup.php          # Agente Sentinela & AutoSetup (PHP)
+│   └── sentinel-autosetup.js           # Agente Sentinela & AutoSetup (Node)
 └── tests/
-    ├── run_tests.js                    # Suíte automatizada de testes (46 asserções + E2E Sandbox)
+    ├── run_tests.js                    # Suíte automatizada de testes (48 asserções + E2E Sandbox)
+    ├── adversarial_suite.js            # Testes adversariais de payload e PCI (Node)
+    ├── adversarial_webhook_test.js     # Testes adversariais de idempotência de Webhook (Node)
+    ├── adversarial_stress_test.php     # Testes adversariais de stress (PHP 8.1/8.2)
     ├── phpunit_runner.php              # Runner nativo para PHP 8.1/8.2 CLI
     └── fixtures/                       # Payloads de simulação da API Iugu
+```
+
+---
+
+### Ambiente de Nuvem para Revisão e Testes (Claude Code)
+O repositório possui um ambiente de nuvem dedicado ao papel de **revisor e tester**, que garante compatibilidade com o WHMCS 8.13.7 e com a API Iugu v1 sem tocar em servidores de produção. O script `scripts/cloud-env-setup.sh` prepara o container (PHP 8.1 e 8.2 CLI com `curl`, `json`, `mbstring`, `openssl`; `archived/`; lint; Sentinel AutoSetup). Hosts de rede, variáveis e política de segredos estão documentados na seção 5 do [`AGENTS.md`](./AGENTS.md).
+
+```bash
+# Suíte completa exatamente como a CI (executar em PHP 8.1 e 8.2):
+mkdir -p archived
+find modules scripts tests -name "*.php" -print0 | xargs -0 -n1 php -l
+php scripts/sentinel-autosetup.php && node scripts/sentinel-autosetup.js
+node tests/run_tests.js && node tests/adversarial_suite.js && node tests/adversarial_webhook_test.js
+php tests/phpunit_runner.php && php tests/adversarial_stress_test.php
 ```
 
 ---
@@ -125,7 +145,7 @@ Consulte os manuais detalhados em:
 Commercial-grade, configurable **Credit Card Transparent Checkout** payment gateway module for **WHMCS 8.13.7** (PHP 8.1 and 8.2), integrated with the **Iugu REST API v1** and **Iugu.js v2** client-side tokenization.
 
 ### Key Features
-- **PCI-DSS Client-Side Tokenization:** Cardholder data (`number` and `verification_value`) are tokenized in the browser via `https://js.iugu.net/v2`. Card inputs intentionally omit HTML `name` attributes so raw card numbers never touch the WHMCS server.
+- **PCI-DSS Client-Side Tokenization:** Cardholder data (`number` and `verification_value`) are tokenized in the browser via `https://js.iugu.com/v2`. Card inputs intentionally omit HTML `name` attributes so raw card numbers never touch the WHMCS server.
 - **Synchronous Checkout & Idempotent Webhook Handler:**
   - Marks WHMCS invoices as `Paid` immediately upon checkout approval (`addInvoicePayment`), recording the exact Iugu gateway fee (`taxes_paid_cents`) and automatically triggering WHMCS service provisioning.
   - Includes an asynchronous webhook callback (`modules/gateways/callback/iugucc.php`) that verifies invoice status server-to-server (`GET /v1/invoices/{id}`) and updates unpaid invoices idempotently.
@@ -139,3 +159,6 @@ node tests/run_tests.js
 # Bump semantic version (automatically backs up modified files to archived/):
 node scripts/bump-version.js patch
 ```
+
+### Cloud Review & Testing Environment (Claude Code)
+A dedicated cloud environment acts as **reviewer and tester**, validating compatibility with WHMCS 8.13.7 and the Iugu API v1 without touching production servers. `scripts/cloud-env-setup.sh` provisions the container (PHP 8.1 and 8.2 CLI with `curl`, `json`, `mbstring`, `openssl`; the `archived/` directory; strict lint on both versions; Sentinel AutoSetup). Allowed network hosts, non-secret variables and the secrets policy are documented in section 5 of [`AGENTS.md`](./AGENTS.md). Iugu.js v2 is loaded from its official host `https://js.iugu.com/v2`; the host `js.iugu.net` does not exist and is rejected by a regression test.
