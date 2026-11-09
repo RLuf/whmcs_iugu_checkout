@@ -37,6 +37,12 @@ jobs:
         run: |
           find modules scripts tests -name "*.php" -print0 | xargs -0 -n1 php -l
 
+      - name: Run Sentinel AutoSetup & Watchdog Self-Check (Initializes archived/snapshots/)
+        run: |
+          mkdir -p archived
+          php scripts/sentinel-autosetup.php
+          node scripts/sentinel-autosetup.js
+
       - name: Run Core & Adversarial Test Suites
         run: |
           node tests/run_tests.js
@@ -44,10 +50,6 @@ jobs:
           node tests/adversarial_webhook_test.js
           php tests/phpunit_runner.php
           php tests/adversarial_stress_test.php
-
-      - name: Run Sentinel AutoSetup & Watchdog Self-Check
-        run: |
-          php scripts/sentinel-autosetup.php
 
   jules-pr-review-gate:
     name: Request Jules Code Review on PR
