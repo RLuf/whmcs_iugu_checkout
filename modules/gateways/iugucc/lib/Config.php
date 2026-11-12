@@ -47,7 +47,7 @@ final class Config
         $this->minInstallmentValue = max(1.0, $minVal);
 
         $this->invoiceDescription = trim((string) ($params['invoiceDescription'] ?? 'Fatura #{invoice_id} - imovelsite.com.br'));
-        $this->statementDescriptor = substr(trim((string) ($params['statementDescriptor'] ?? 'IMOVELSITE')), 0, 13);
+        $this->statementDescriptor = substr(trim((string) ($params['statementDescriptor'] ?? 'IMOVELSITE')), 0, 12); // Iugu soft_descriptor_light: max 12 chars
         $this->webhookSecret = trim((string) ($params['webhookSecret'] ?? ''));
         $this->cpfCustomFieldName = trim((string) ($params['cpfCustomField'] ?? 'CPF/CNPJ'));
         $this->debugLogging = $this->parseBool($params['debugLogging'] ?? true);

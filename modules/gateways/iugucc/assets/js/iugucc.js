@@ -14,6 +14,9 @@
 })(typeof self !== 'undefined' ? self : this, function () {
     'use strict';
 
+    /** Max time to wait for Iugu.js createPaymentToken before releasing the form (ms). */
+    var TOKENIZATION_TIMEOUT_MS = 30000;
+
     /**
      * Strips all non-digit characters from a string.
      */
@@ -238,8 +241,26 @@
             window.Iugu.setAccountID(config.accountId);
             window.Iugu.setTestMode(Boolean(config.sandboxMode));
 
+            // Watchdog: Iugu.js v2 tokenizes through a JSONP <script> request. If that request fails
+            // (API 5xx, network block), Iugu.js never calls back. Without this guard the customer would
+            // stay on a disabled "Processando..." button forever.
+            var tokenizationSettled = false;
+            var watchdogMs = parseInt(config.tokenizationTimeoutMs || TOKENIZATION_TIMEOUT_MS, 10) || TOKENIZATION_TIMEOUT_MS;
+            var watchdog = setTimeout(function () {
+                if (tokenizationSettled) return;
+                tokenizationSettled = true;
+                if (submitBtn) {
+                    submitBtn.disabled = false;
+                    submitBtn.textContent = originalBtnText;
+                }
+                showAlert(i18n.err_network || i18n.err_tokenization_failed || 'Erro de comunicação com o servidor.', 'error');
+            }, watchdogMs);
+
             window.Iugu.createPaymentToken(form, function (tokenResponse) {
-                if (tokenResponse.errors) {
+                if (tokenizationSettled) return; // late answer after watchdog fired: ignore (token would be unusable)
+                tokenizationSettled = true;
+                clearTimeout(watchdog);
+                if (!tokenResponse || tokenResponse.errors) {
                     if (submitBtn) {
                         submitBtn.disabled = false;
                         submitBtn.textContent = originalBtnText;
@@ -304,6 +325,7 @@
         isValidHolderName: isValidHolderName,
         isValidCpfCnpj: isValidCpfCnpj,
         buildServerSubmissionPayload: buildServerSubmissionPayload,
-        initCheckoutForm: initCheckoutForm
+        initCheckoutForm: initCheckoutForm,
+        TOKENIZATION_TIMEOUT_MS: TOKENIZATION_TIMEOUT_MS
     };
 });

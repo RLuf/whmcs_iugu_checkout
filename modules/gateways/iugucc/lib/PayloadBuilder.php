@@ -45,8 +45,9 @@ final class PayloadBuilder
 
         $floatAmount = round((float) $amount, 2);
         $priceCents = (int) round($floatAmount * 100);
-        if ($priceCents <= 0) {
-            throw new InvalidArgumentException('Invoice amount must be greater than zero.');
+        if ($priceCents < 100) {
+            // Iugu POST /v1/charge: items[].price_cents minimum is 100 (R$ 1,00)
+            throw new InvalidArgumentException('Invoice amount must be at least R$ 1,00 (Iugu minimum price_cents = 100).');
         }
 
         $validInstallments = max(1, min($config->getMaxInstallments(), $installments));

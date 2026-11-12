@@ -125,9 +125,9 @@ function iugucc_config(): array
         'statementDescriptor' => [
             'FriendlyName' => 'Identificação na Fatura do Cartão',
             'Type' => 'text',
-            'Size' => '13',
+            'Size' => '12',
             'Default' => 'IMOVELSITE',
-            'Description' => 'Texto curto exibido na fatura do cartão do cliente (máx. 13 caracteres).',
+            'Description' => 'Texto curto exibido na fatura do cartão do cliente (máx. 12 caracteres, limite oficial do campo soft_descriptor_light da Iugu).',
         ],
         'cpfCustomField' => [
             'FriendlyName' => 'Nome do Campo Personalizado de CPF/CNPJ',

@@ -104,6 +104,9 @@ flowchart LR
     ├── adversarial_suite.js            # Testes adversariais de payload e PCI (Node)
     ├── adversarial_webhook_test.js     # Testes adversariais de idempotência de Webhook (Node)
     ├── adversarial_stress_test.php     # Testes adversariais de stress (PHP 8.1/8.2)
+    ├── browser_checkout_e2e.js         # E2E em Chromium: template real + Iugu.js v2 (conta de teste)
+    ├── browser/render_checkout.php     # Renderiza o template do checkout fora do WHMCS para o E2E
+    ├── sandbox_e2e_iugu.php            # Cobrança/estorno reais em sandbox com as classes do módulo
     ├── phpunit_runner.php              # Runner nativo para PHP 8.1/8.2 CLI
     └── fixtures/                       # Payloads de simulação da API Iugu
 ```
@@ -137,6 +140,7 @@ Consulte os manuais detalhados em:
 - [Guia de Testes em Modo Sandbox](./docs/SANDBOX_TESTING.md)
 - [Manifesto de Mapeamento de Esquemas (WHMCS ↔ Iugu ↔ Sentinela)](./docs/SCHEMA_MAPPING.md)
 - [Agente Sentinela & AutoSetup (Snapshot No-Hot, Watchdog & Prontidão Comercial)](./docs/SENTINEL_AUTOSETUP.md)
+- [Auditoria de Conformidade WHMCS 8.13.7 × API Iugu v1 (defeitos corrigidos, matriz do Financeiro, roadmap de recorrência)](./docs/AUDITORIA_WHMCS_IUGU.md)
 
 ---
 

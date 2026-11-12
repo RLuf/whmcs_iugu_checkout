@@ -52,6 +52,13 @@ node tests/run_tests.js && node tests/adversarial_suite.js && node tests/adversa
 php tests/phpunit_runner.php && php tests/adversarial_stress_test.php
 ```
 
+Testes que exigem a conta de **teste** da Iugu (nunca produção) e rede para `api.iugu.com` / `js.iugu.com`:
+```bash
+IUGU_ACCOUNT_ID=<account_id> node tests/browser_checkout_e2e.js                      # Chromium + template real + Iugu.js v2
+IUGU_ACCOUNT_ID=<account_id> IUGU_API_TOKEN=<test_token> php tests/sandbox_e2e_iugu.php  # cobrança real em sandbox
+```
+O relatório de conformidade (WHMCS × Iugu) e a lista de limitações do tipo *Third-Party* estão em `docs/AUDITORIA_WHMCS_IUGU.md`.
+
 ---
 
 ## 5. Ambiente de Nuvem (Claude Code) — Papel de Revisor & Tester

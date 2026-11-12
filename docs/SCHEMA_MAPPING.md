@@ -46,7 +46,7 @@ Este documento aplica a metodologia formal de **Semantic Schema Mapping Planning
 | `months` (`REQUIRED`) | `$_POST['installments']` + `tblpaymentgateways(maxInstallments, minInstallmentValue)` | Derived | Cast para `int`, limitado a `1..maxInstallments`. Se `(amount / months) < minInstallmentValue`, força `1`. |
 | `keep_dunning` | Constante `false` | Gap (Defaulted) | Cobrança direta por token de cartão não deve acionar régua de cobrança de boleto. |
 | `order_id` | `'whmcs_' . tblinvoices.id` | Derived | Prefixo canônico `whmcs_{id}` para correlação determinística de Webhooks. |
-| `soft_descriptor_light` | `tblpaymentgateways.value` (`statementDescriptor`) | Derived | `substr(trim(value), 0, 13)`, padrão `'IMOVELSITE'`. |
+| `soft_descriptor_light` | `tblpaymentgateways.value` (`statementDescriptor`) | Derived | `substr(trim(value), 0, 12)` (limite oficial Iugu: 12 caracteres), padrão `'IMOVELSITE'`. |
 | `items[0].description` (`REQUIRED`) | `tblpaymentgateways(invoiceDescription)` + `tblinvoices.id` | Derived | Substitui `{invoice_id}` por `tblinvoices.id` e `{company_name}` por `'imovelsite.com.br'`. |
 | `items[0].quantity` (`REQUIRED`) | Constante `1` | Gap (Defaulted) | Consolida o saldo líquido a pagar da fatura WHMCS em 1 item financeiro. |
 | `items[0].price_cents` (`REQUIRED`) | `round((tblinvoices.total - SUM(tblaccounts.amountin - amountout)) * 100)` | Aggregated / Derived | Converte o saldo remanescente (`Decimal BRL`) em centavos inteiros (`int > 0`), autenticado via assinatura HMAC-SHA256. |

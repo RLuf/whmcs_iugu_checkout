@@ -10,7 +10,15 @@ O formato é baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.
 ### Fixed (Corrigido)
 - **URL oficial do Iugu.js v2 (`Config::IUGU_JS_URL`)**: o módulo carregava a biblioteca de tokenização de `https://js.iugu.net/v2`, host que **não existe no DNS** (NXDOMAIN). Em produção o navegador nunca definiria `window.Iugu` e todo checkout falharia com "Biblioteca Iugu.js não carregada". Corrigido para `https://js.iugu.com/v2`, host oficial que serve o bundle com `setAccountID`, `setTestMode` e `createPaymentToken` (verificado em Chromium real via Playwright). Referências ajustadas em `iugucc.js`, `README.md`, `AGENTS.md` e `docs/ARCHITECTURE.md`.
 
+### Fixed (Corrigido) — auditoria 2026-11-12
+- **Cliente preso em "Processando..." (`iugucc.js`)**: o Iugu.js v2 tokeniza via JSONP e, em erro HTTP da API, nunca chama o callback. Adicionado watchdog de 30 s (`TOKENIZATION_TIMEOUT_MS`) que reabilita o botão, exibe `err_network` e ignora respostas tardias. Reproduzido e validado em Chromium real (`tests/browser_checkout_e2e.js`).
+- **`soft_descriptor_light` com 13 caracteres**: a Iugu aceita até 12. `Config.php`, campo do Admin e `SCHEMA_MAPPING.md` ajustados.
+- **`items[].price_cents` abaixo do mínimo da Iugu (100)**: `PayloadBuilder` passa a rejeitar valores < R$ 1,00 antes da chamada à API.
+
 ### Added (Adicionado)
+- **Relatório de auditoria (`docs/AUDITORIA_WHMCS_IUGU.md`)**: conformidade função a função com o padrão de gateway do WHMCS 8.13.7 e com a API Iugu v1, matriz "opções do Financeiro × iugucc", recomendação de evolução para gateway tokenizado (`_remoteinput`/`_capture`) e matriz de testes.
+- **Teste de navegador (`tests/browser_checkout_e2e.js` + `tests/browser/render_checkout.php`)**: renderiza o template real do checkout, carrega o Iugu.js v2 oficial em Chromium headless, valida Luhn/PCI (nenhum PAN/CVV chega ao callback), tokenização em modo teste e o watchdog.
+- **E2E de cobrança em sandbox (`tests/sandbox_e2e_iugu.php`)**: handshake, `payment_token` de teste, `POST /v1/charge` via `ChargeProcessor`, consulta autoritativa, idempotência de webhook, reembolso parcial e total, reuso de token. Suporta `IUGU_AUTH_MODE=query` (autenticação por `api_token`, método oficial) para ambientes cujo proxy reescreve `Authorization`.
 - **Testes de regressão (`tests/run_tests.js`)**: duas asserções garantem que `Config::IUGU_JS_URL` aponta para `js.iugu.com` e que nenhum fonte do módulo referencia `js.iugu.net`.
 - **Script de ambiente de nuvem (`scripts/cloud-env-setup.sh`)**: instala PHP 8.1 e 8.2 CLI (PPA ondrej/php) com `curl`, `json`, `mbstring` e `openssl`, cria `archived/`, executa lint estrito nas duas versões e o Sentinel AutoSetup (PHP + Node). Usado como *setup script* do ambiente Claude Code na nuvem para o papel de revisor/tester (ver `AGENTS.md`, seção 5).
 - **`.gitignore`**: padrões adicionais de histórico local (`archive/`, `arquivado*/`, `historico/`, `histórico/`, `_archive*/`).

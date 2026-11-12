@@ -320,7 +320,7 @@ try {
 } catch (InvalidArgumentException $e) {
     $zeroAmountCaught = true;
     assertTest(
-        str_contains($e->getMessage(), 'greater than zero'),
+        str_contains($e->getMessage(), 'at least R$ 1,00'),
         "PayloadBuilder rejects zero amount: '{$e->getMessage()}'"
     );
 }
@@ -333,11 +333,22 @@ try {
 } catch (InvalidArgumentException $e) {
     $negativeAmountCaught = true;
     assertTest(
-        str_contains($e->getMessage(), 'greater than zero'),
+        str_contains($e->getMessage(), 'at least R$ 1,00'),
         "PayloadBuilder rejects negative amount: '{$e->getMessage()}'"
     );
 }
 assertTest($negativeAmountCaught, 'PayloadBuilder throws InvalidArgumentException on negative amount');
+
+// Scenario D.2b: Below Iugu minimum (R$ 0,99 → price_cents 99 < 100) must be rejected before the API call
+$belowMinCaught = false;
+try {
+    PayloadBuilder::buildChargePayload($baseConfig, 'tok_123', 1024, 0.99, []);
+} catch (InvalidArgumentException $e) {
+    $belowMinCaught = true;
+}
+assertTest($belowMinCaught, 'PayloadBuilder rejects amounts below the Iugu minimum of 100 price_cents (R$ 1,00)');
+$minOk = PayloadBuilder::buildChargePayload($baseConfig, 'tok_123', 1024, 1.00, []);
+assertTest($minOk['items'][0]['price_cents'] === 100, 'PayloadBuilder accepts exactly R$ 1,00 (price_cents = 100)');
 
 // Scenario D.3: Zero amount handled gracefully in Config::computeInstallmentOptions
 $zeroInstOptions = $baseConfig->computeInstallmentOptions(0.00);
