@@ -297,7 +297,14 @@ final class ChargeProcessor
         // Check if Iugu returned specific field errors
         if (!empty($body['errors'])) {
             if (is_string($body['errors'])) {
-                return $body['errors'];
+                $raw = trim($body['errors']);
+                if (stripos($raw, 'token') !== false && stripos($raw, 'invalid') !== false) {
+                    // Iugu: single-use card token already consumed/expired, or test token used with a LIVE key.
+                    return $isEnglish
+                        ? 'The card validation expired or is no longer valid. Reload the invoice page and enter the card details again.'
+                        : 'A validação do cartão expirou ou não é mais válida. Recarregue a página da fatura e informe os dados do cartão novamente.';
+                }
+                return ($isEnglish ? 'Payment could not be processed: ' : 'Não foi possível processar o pagamento: ') . $raw;
             }
             if (is_array($body['errors'])) {
                 $flatErrors = [];

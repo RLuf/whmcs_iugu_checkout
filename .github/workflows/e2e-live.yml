@@ -1,0 +1,117 @@
+name: E2E live (real storefront, real browser)
+
+# Runs tests/e2e/live_flow.js in Chromium from a runner with a single, stable egress IP
+# (WHMCS ties the client session to the visitor IP).
+#
+#   preflight  read-only: are the iugucc files published? is the gateway offered at checkout?
+#   full       the customer journey: imovelsite.com.br -> order -> test card on the invoice -> service active
+#              -> e-mails -> provisioned site -> property. It PLACES A REAL ORDER, so it only runs when asked:
+#                - manually (Actions > E2E live > Run workflow, stage "full"), or
+#                - by a push whose head commit message contains "[e2e-live:full]".
+#              The gateway must be in Sandbox Mode with an Iugu TEST token: the run pays with an Iugu test card.
+#
+# No secret is used or needed: the runner acts as an anonymous visitor / new customer.
+
+on:
+  workflow_dispatch:
+    inputs:
+      stage:
+        description: 'Stage to run'
+        type: choice
+        options: [preflight, full]
+        default: preflight
+      email:
+        description: 'Mailbox for the test customer (stage=full)'
+        type: string
+        required: false
+      prefix:
+        description: 'Site prefix, 3-20 lowercase letters/digits (stage=full)'
+        type: string
+        required: false
+  push:
+    branches: [ 'feat/**' ]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: e2e-live
+  cancel-in-progress: false
+
+jobs:
+  live:
+    name: Live E2E (Chromium)
+    if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[e2e-live:')
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      EVENT_NAME: ${{ github.event_name }}
+      INPUT_STAGE: ${{ inputs.stage }}
+      INPUT_EMAIL: ${{ inputs.email }}
+      INPUT_PREFIX: ${{ inputs.prefix }}
+      COMMIT_MESSAGE: ${{ github.event.head_commit.message }}
+      E2E_STATE: ${{ github.workspace }}/archived/e2e/state.json
+      E2E_SHOTS: ${{ github.workspace }}/archived/e2e/shots
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Playwright + Chromium
+        run: |
+          npm install --no-save --no-package-lock playwright@1.49.1
+          npx playwright install --with-deps chromium
+
+      - name: Resolve stage and test customer
+        run: |
+          stage="preflight"
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            stage="${INPUT_STAGE:-preflight}"
+          elif printf '%s' "$COMMIT_MESSAGE" | grep -q '\[e2e-live:full\]'; then
+            stage="full"
+          fi
+          case "$stage" in preflight|full) ;; *) echo "invalid stage"; exit 2 ;; esac
+          prefix="$INPUT_PREFIX"
+          [ -n "$prefix" ] || prefix="iugucc${GITHUB_RUN_NUMBER}t"
+          email="$INPUT_EMAIL"
+          [ -n "$email" ] || email="octopus+${prefix}@inkboxmail.com"
+          printf '%s' "$prefix" | grep -Eq '^[a-z0-9]{3,20}$' || { echo "invalid prefix"; exit 2; }
+          printf '%s' "$email" | grep -Eq '^[A-Za-z0-9._+-]+@[A-Za-z0-9.-]+$' || { echo "invalid email"; exit 2; }
+          {
+            echo "E2E_STAGE=$stage"
+            echo "E2E_PREFIX=$prefix"
+            echo "E2E_EMAIL=$email"
+          } >> "$GITHUB_ENV"
+          echo "stage=$stage prefix=$prefix"
+
+      - name: Run live flow
+        run: node tests/e2e/live_flow.js "$E2E_STAGE"
+
+      - name: Summary
+        if: always()
+        run: |
+          f="archived/e2e/report_${E2E_STAGE}.json"
+          [ -f "$f" ] || { echo "no report"; exit 0; }
+          node -e '
+            const r = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8"));
+            const out = ["### E2E live — stage " + r.stage, "", "| | Verificação | Detalhe |", "| :-: | :-- | :-- |"];
+            for (const c of r.checks) out.push(`| ${c.ok ? "✅" : "❌"} | ${c.name} | ${String(c.details || "").replace(/\|/g, "/").slice(0, 200)} |`);
+            require("fs").appendFileSync(process.env.GITHUB_STEP_SUMMARY, out.join("\n") + "\n");
+          ' "$f"
+
+      # The report and screenshots contain only the fake test customer; the account password is never written
+      # to them (the state file with the password is not uploaded).
+      - name: Upload report and screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-live-${{ github.run_number }}
+          path: |
+            archived/e2e/report_*.json
+            archived/e2e/shots/
+          if-no-files-found: ignore
+          retention-days: 14

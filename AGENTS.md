@@ -37,7 +37,7 @@ Copy-Item "modules/gateways/iugucc.php" "archived/${ts}_iugucc.php"
 ---
 
 ## 4. Compatibilidade e Padrões de Qualidade
-- **WHMCS Alvo:** `8.13.7` (`https://www.webstorage.net.br/financeiro/master/` / `imovelsite.com.br`)
+- **WHMCS Alvo:** `8.13.7` — área do cliente/raiz em `https://www.webstorage.net.br/financeiro/`, Admin em `https://www.webstorage.net.br/financeiro/master/`, vitrine em `https://imovelsite.com.br/`. URLs do módulo (callback/webhook, assets) ficam sob a **raiz**: `https://www.webstorage.net.br/financeiro/modules/gateways/callback/iugucc.php`.
 - **PHP Alvo:** `8.1` e `8.2` (`declare(strict_types=1);`, tipagem forte, sem propriedades dinâmicas depreciadas no PHP 8.2).
 - **Versionamento Semântico:** Utilize `node scripts/bump-version.js <patch|minor|major>` para atualizar a versão no arquivo `VERSION`, `composer.json` e metadados do módulo.
 - **Hosts oficiais da Iugu:** API REST em `https://api.iugu.com/v1` e Iugu.js v2 em `https://js.iugu.com/v2`. O host `js.iugu.net` não existe (NXDOMAIN) e é proibido em qualquer arquivo do módulo (há teste de regressão em `tests/run_tests.js`).
@@ -60,7 +60,14 @@ IUGU_E2E_CONFIRM_TEST_TOKEN=yes IUGU_ACCOUNT_ID=<account_id> IUGU_API_TOKEN=<tes
 ```
 > **Token de produção (LIVE) é proibido em qualquer teste.** Um token LIVE lista as faturas reais da conta e `POST /v1/charge` criaria cobranças reais. Antes de usar um token, confirme que é do tipo *Teste*. O token usado pelo módulo de boleto existente é de produção.
 
-Regra de negócio fixada por teste: o callback só cobra faturas com status `Unpaid`; qualquer outro status responde `409 INVOICE_NOT_PAYABLE`.
+Teste definitivo no WHMCS real (Chromium, como cliente — cria pedido de verdade; só com o gateway em **Modo Sandbox** e token de **Teste**):
+```bash
+node tests/e2e/live_flow.js preflight                                  # somente leitura: módulo publicado? gateway no checkout?
+E2E_EMAIL=<caixa_de_teste> E2E_PREFIX=<prefixo> node tests/e2e/live_flow.js full   # imovelsite.com.br -> pedido -> cartão de teste -> serviço ativo -> e-mails -> site -> imóvel
+```
+O estado da conta de teste fica em `archived/e2e/` (nunca versionado). A instalação no servidor é feita por `scripts/install-on-whmcs.sh` (copia só os arquivos do `iugucc`, com backup); o pacote para cPanel sai de `scripts/build-release.sh`.
+
+Regras de negócio fixadas por teste: o callback só cobra faturas com status `Unpaid` (qualquer outro status responde `409 INVOICE_NOT_PAYABLE`); o Modo Sandbox usa somente o token de Teste (sem recorrer ao token LIVE); fora de `viewinvoice.php` (e-mail de fatura, conclusão do pedido) `iugucc_link()` devolve apenas o botão que leva à fatura.
 O relatório de conformidade (WHMCS × Iugu) e a lista de limitações do tipo *Third-Party* estão em `docs/AUDITORIA_WHMCS_IUGU.md`.
 
 ---

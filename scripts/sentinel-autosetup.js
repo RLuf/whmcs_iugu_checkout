@@ -24,6 +24,7 @@ const MODULE_FILES = [
     'modules/gateways/iugucc/autoload.php',
     'modules/gateways/iugucc/whmcs.json',
     'modules/gateways/iugucc/logo.svg',
+    'modules/gateways/iugucc/logo.png',
     'modules/gateways/iugucc/lib/Config.php',
     'modules/gateways/iugucc/lib/IuguHttpClient.php',
     'modules/gateways/iugucc/lib/PayloadBuilder.php',

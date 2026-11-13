@@ -131,11 +131,16 @@ node tests/whmcs_finance_sim.js   # fatura, parcial, crédito, Mass Pay, Add Fun
 ---
 
 ### Instalação Rápida
-1. Copie a pasta `modules/` para a raiz da instalação do WHMCS (`<whmcs_root>/modules/gateways/...`).
-2. No painel Admin do WHMCS, acesse **Setup > Payments > Payment Gateways > All Payment Gateways** e ative **Iugu - Cartão de Crédito (Checkout Transparente)**.
-3. Configure seu **ID da Conta Iugu (Account ID)**, **Token de API** e se desejar operar em **Modo Sandbox**.
-4. No painel da Iugu (**Configurações > Gatilhos**), aponte o webhook para:
-   `https://www.webstorage.net.br/financeiro/master/modules/gateways/callback/iugucc.php`
+1. No servidor, com o usuário dono dos arquivos do WHMCS, rode o instalador apontando para a **raiz do WHMCS** (pasta com `configuration.php`). Ele copia só os arquivos do `iugucc`, faz backup de versão anterior e não toca em mais nada:
+   ```bash
+   curl -fsSL https://raw.githubusercontent.com/RLuf/whmcs_iugu_checkout/main/scripts/install-on-whmcs.sh | IUGUCC_REF=main bash -s -- /home/USUARIO/public_html/financeiro
+   ```
+   Alternativas: `--dry-run` para simular; `bash scripts/build-release.sh` gera `dist/iugucc-<versão>.zip` para extrair pelo cPanel; ou copie a pasta `modules/` manualmente.
+2. No Admin do WHMCS, em **Apps & Integrations** (ou **Portais para Pagamento > All Payment Gateways**), ative **Iugu - Cartão de Crédito**.
+3. Configure o **ID da Conta Iugu (Account ID)** e os tokens. O **Modo Sandbox exige o Token de API do tipo *Teste***; o token de produção nunca é usado em sandbox.
+4. No painel da Iugu (**Configurações > Gatilhos**), aponte o webhook para a raiz do WHMCS (não a pasta do Admin):
+   `https://www.webstorage.net.br/financeiro/modules/gateways/callback/iugucc.php`
+5. Confira com `node tests/e2e/live_flow.js preflight` (somente leitura).
 
 Consulte os manuais detalhados em:
 - [Guia Completo de Instalação no WHMCS 8.13.7](./docs/INSTALLATION_WHMCS.md)
@@ -166,6 +171,13 @@ node tests/run_tests.js
 # Bump semantic version (automatically backs up modified files to archived/):
 node scripts/bump-version.js patch
 ```
+
+### Quick Install
+Run the installer on the server as the user that owns the WHMCS files, pointing at the **WHMCS root** (the folder containing `configuration.php`). It copies only the `iugucc` files, backs up a previous version to `~/iugucc_backups/` and touches nothing else:
+```bash
+curl -fsSL https://raw.githubusercontent.com/RLuf/whmcs_iugu_checkout/main/scripts/install-on-whmcs.sh | IUGUCC_REF=main bash -s -- /home/USER/public_html/financeiro
+```
+Add `--dry-run` to preview. `bash scripts/build-release.sh` builds `dist/iugucc-<version>.zip` for a cPanel upload. Then activate **Iugu - Cartão de Crédito** under **Apps & Integrations**, fill in the Account ID and tokens (Sandbox Mode requires an Iugu **Test** API token; the live token is never used in sandbox), and point the Iugu webhook at `<whmcs_root_url>/modules/gateways/callback/iugucc.php`. `node tests/e2e/live_flow.js preflight` is a read-only check that the module is deployed and offered at checkout; `node tests/e2e/live_flow.js full` is the definitive customer journey (storefront → order → test-card payment in Sandbox Mode → service activation → e-mails → provisioned site).
 
 ### Cloud Review & Testing Environment (Claude Code)
 A dedicated cloud environment acts as **reviewer and tester**, validating compatibility with WHMCS 8.13.7 and the Iugu API v1 without touching production servers. `scripts/cloud-env-setup.sh` provisions the container (PHP 8.1 and 8.2 CLI with `curl`, `json`, `mbstring`, `openssl`; the `archived/` directory; strict lint on both versions; Sentinel AutoSetup). Allowed network hosts, non-secret variables and the secrets policy are documented in section 5 of [`AGENTS.md`](./AGENTS.md). Iugu.js v2 is loaded from its official host `https://js.iugu.com/v2`; the host `js.iugu.net` does not exist and is rejected by a regression test.

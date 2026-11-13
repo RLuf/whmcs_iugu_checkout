@@ -5,10 +5,24 @@ O formato é baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.
 
 ---
 
-## [Unreleased] - 2026-11-09
+## [Unreleased] - 2026-11-13
 
 ### Fixed (Corrigido)
 - **URL oficial do Iugu.js v2 (`Config::IUGU_JS_URL`)**: o módulo carregava a biblioteca de tokenização de `https://js.iugu.net/v2`, host que **não existe no DNS** (NXDOMAIN). Em produção o navegador nunca definiria `window.Iugu` e todo checkout falharia com "Biblioteca Iugu.js não carregada". Corrigido para `https://js.iugu.com/v2`, host oficial que serve o bundle com `setAccountID`, `setTestMode` e `createPaymentToken` (verificado em Chromium real via Playwright). Referências ajustadas em `iugucc.js`, `README.md`, `AGENTS.md` e `docs/ARCHITECTURE.md`.
+
+### Fixed (Corrigido) — preparação para instalação no WHMCS real 2026-11-13
+- **Modo Sandbox recorria ao token de produção (`Config::getActiveApiToken`)**: com o Sandbox ligado e o campo *Token de API (Teste)* vazio, o módulo usava o token LIVE. A Iugu isola teste e produção — medido na API: token LIVE + cartão tokenizado em modo teste → `HTTP 400 {"errors":"token is invalid"}` — então todo checkout de teste falhava com erro de cartão enganoso. Agora o Sandbox usa somente o token de Teste; sem ele, a fatura mostra `err_sandbox_token_missing` e o callback responde `503 NOT_CONFIGURED` (entrada `Gateway Not Configured` no Gateway Log).
+- **`iugucc_link()` emitia o formulário de cartão e scripts fora da fatura**: o WHMCS chama `_link` também na tela de conclusão do pedido e ao montar `{$invoice_payment_link}` dos e-mails de fatura. O formulário completo (com `<script>`) ia para o corpo do e-mail e para a tela de conclusão. Fora de `viewinvoice.php` o módulo agora devolve só o botão **Pagar com Cartão de Crédito**, que leva à fatura.
+- **Mensagens de erro da Iugu em texto puro (`ChargeProcessor`)**: `errors` como string (ex.: `token is invalid`) passa a virar instrução clara ao cliente (recarregar a página e tentar de novo) em vez do texto técnico.
+- **Documentação apontava a pasta do Admin como raiz do WHMCS**: a URL do webhook/callback é `https://www.webstorage.net.br/financeiro/modules/gateways/callback/iugucc.php` (raiz), não `/financeiro/master/…` (Admin). Corrigido em `README.md`, `AGENTS.md` e `docs/INSTALLATION_WHMCS.md`; identificação na fatura do cartão documentada com 12 caracteres.
+
+### Added (Adicionado) — preparação para instalação no WHMCS real 2026-11-13
+- **`scripts/install-on-whmcs.sh`**: instalador para rodar no servidor. Copia somente `modules/gateways/iugucc.php`, `modules/gateways/callback/iugucc.php` e `modules/gateways/iugucc/`; valida a sintaxe com o PHP do servidor; faz backup de versão anterior em `~/iugucc_backups/<data>`; `--dry-run` e `--uninstall`. Não altera nenhum outro arquivo do WHMCS.
+- **`scripts/build-release.sh`**: gera `dist/iugucc-<versão>.zip` com os mesmos arquivos, para envio pelo cPanel.
+- **`tests/e2e/live_flow.js`**: teste em Chromium contra o WHMCS real, como cliente. Estágio `preflight` (somente leitura: arquivos publicados, gateway no checkout, Iugu.js) e estágio `full` em sessão única: `imovelsite.com.br` → *Contrate agora* → cadastro → pedido → cartão de teste na fatura → fatura paga → serviço ativo → e-mails sem repetição → site provisionado → painel do site → cadastro de imóvel. Nada conversa direto com a API da Iugu: o navegador fala com o WHMCS e o módulo fala com a Iugu.
+- **`.github/workflows/e2e-live.yml`**: executa o `live_flow.js` em um runner (acionamento manual, ou push com `[e2e-live:preflight]` / `[e2e-live:full]` na mensagem do commit). Não usa segredos.
+- **Manifesto e logotipo (`whmcs.json`, `logo.svg`, `logo.png`)**: manifesto enxuto no formato usado pelo *Apps & Integrations* e logotipo PNG, para o módulo aparecer com imagem e descrição na lista de apps.
+- **Testes**: cenário de Sandbox só com token LIVE e cenário de `_link` em e-mail/conclusão de pedido em `tests/whmcs_finance_sim.js` (80 asserções em PHP 8.1 e 8.2); seleção de token em `tests/phpunit_runner.php` (14) e `tests/adversarial_stress_test.php` (63).
 
 ### Fixed (Corrigido) — simulação do Financeiro 2026-11-13
 - **Cobrança em fatura que não está em aberto (`callback/iugucc.php`)**: com uma assinatura capturada enquanto a fatura estava `Unpaid`, o callback cobrava o cartão mesmo depois de a fatura virar `Cancelled`, `Refunded`, `Collections`, `Draft` ou `Payment Pending`; o cliente era debitado e a fatura não era baixada. Agora só faturas `Unpaid` seguem para a cobrança; as demais respondem `409 INVOICE_NOT_PAYABLE` e geram a entrada `Checkout Blocked (Invoice Not Payable)` no Gateway Log.

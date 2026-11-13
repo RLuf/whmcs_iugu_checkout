@@ -58,7 +58,7 @@ O módulo foi auditado e adequado aos requisitos oficiais de distribuição come
 | Requisito Oficial WHMCS Marketplace | Status no Módulo `iugucc` (`v1.1.0`) | Evidência / Arquivo |
 | :--- | :--- | :--- |
 | Manifesto `whmcs.json` (Schema 1.0) | ✅ Cumprido | [`modules/gateways/iugucc/whmcs.json`](../modules/gateways/iugucc/whmcs.json) |
-| Logotipo Vetorial Oficial do Módulo | ✅ Cumprido | [`modules/gateways/iugucc/logo.svg`](../modules/gateways/iugucc/logo.svg) |
+| Logotipo Oficial do Módulo (SVG + PNG usado pelo Apps & Integrations) | ✅ Cumprido | [`modules/gateways/iugucc/logo.svg`](../modules/gateways/iugucc/logo.svg), [`logo.png`](../modules/gateways/iugucc/logo.png) |
 | Isolamento de Namespace PSR-4 Sem Colisão | ✅ Cumprido | `WHMCS\Module\Gateway\IuguCC\*` via [`autoload.php`](../modules/gateways/iugucc/autoload.php) |
 | Zero Dependência Externa de Composer no Host | ✅ Cumprido | Autoloader nativo embutido para qualquer cPanel |
 | Conformidade PCI-DSS SAQ A | ✅ Cumprido | Tokenização client-side `Iugu.js v2` + [`PciSanitizer.php`](../modules/gateways/iugucc/lib/PciSanitizer.php) |

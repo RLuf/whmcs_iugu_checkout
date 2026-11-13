@@ -81,12 +81,12 @@ function iugucc_config(): array
             'Type' => 'password',
             'Size' => '64',
             'Default' => '',
-            'Description' => 'Token de API de Teste gerado no painel da Iugu (utilizado quando o Modo Sandbox está ativo).',
+            'Description' => 'Token de API do tipo Teste gerado no painel da Iugu. Obrigatório quando o Modo Sandbox está ativo: o token de produção não aceita cartões de teste.',
         ],
         'sandboxMode' => [
             'FriendlyName' => 'Modo Sandbox (Ambiente de Teste)',
             'Type' => 'yesno',
-            'Description' => 'Ative para processar cobranças de teste com cartões de simulação da Iugu (Iugu.setTestMode(true)).',
+            'Description' => 'Ative para processar cobranças de teste com cartões de simulação da Iugu (Iugu.setTestMode(true)). Exige o Token de API (Teste / Sandbox) acima.',
         ],
         'maxInstallments' => [
             'FriendlyName' => 'Parcelamento Máximo',
@@ -173,8 +173,11 @@ function iugucc_link(array $params): string
     $lang = is_file($langFile) ? require $langFile : require __DIR__ . '/iugucc/lang/portuguese-br.php';
 
     if (!$config->isConfigured()) {
+        $notConfiguredMessage = $config->isSandboxTokenMissing()
+            ? $lang['err_sandbox_token_missing']
+            : $lang['err_not_configured'];
         return '<div class="alert alert-warning" style="margin:15px 0;">'
-            . htmlspecialchars($lang['err_not_configured'], ENT_QUOTES, 'UTF-8')
+            . htmlspecialchars($notConfiguredMessage, ENT_QUOTES, 'UTF-8')
             . '</div>';
     }
 
@@ -184,6 +187,18 @@ function iugucc_link(array $params): string
     $clientId = (int) ($client['userid'] ?? $client['id'] ?? 0);
 
     $systemUrl = rtrim((string) ($params['systemurl'] ?? ''), '/');
+
+    // WHMCS calls _link() in three places: the invoice page, the "order complete" page (which may auto-submit
+    // the first <form> it finds) and the invoice e-mails ({$invoice_payment_link}). The card form with its
+    // scripts belongs only on the invoice page. Everywhere else the customer gets a button to the invoice.
+    if (!iugucc_isInvoicePage()) {
+        $invoiceUrl = $systemUrl . '/viewinvoice.php?id=' . $invoiceId;
+        return '<form method="get" action="' . htmlspecialchars($systemUrl . '/viewinvoice.php', ENT_QUOTES, 'UTF-8') . '">'
+            . '<input type="hidden" name="id" value="' . $invoiceId . '">'
+            . '<a href="' . htmlspecialchars($invoiceUrl, ENT_QUOTES, 'UTF-8') . '" class="btn btn-success">'
+            . htmlspecialchars($lang['pay_on_invoice_button'], ENT_QUOTES, 'UTF-8')
+            . '</a></form>';
+    }
     $callbackUrl = $systemUrl . '/modules/gateways/callback/iugucc.php';
     $assetBaseUrl = $systemUrl . '/modules/gateways/iugucc';
 
@@ -201,6 +216,16 @@ function iugucc_link(array $params): string
     ob_start();
     require __DIR__ . '/iugucc/templates/checkout.php';
     return (string) ob_get_clean();
+}
+
+/**
+ * True when the current request is the client-area invoice page (viewinvoice.php), the only place
+ * where the transparent card form may be rendered.
+ */
+function iugucc_isInvoicePage(): bool
+{
+    $script = (string) ($_SERVER['SCRIPT_NAME'] ?? $_SERVER['PHP_SELF'] ?? '');
+    return basename($script) === 'viewinvoice.php';
 }
 
 /**

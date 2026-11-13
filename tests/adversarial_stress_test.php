@@ -114,8 +114,13 @@ assertTest(
 $stringErrorBody = ['errors' => 'Token expirado'];
 $strErrMsg = ChargeProcessor::translateMessage('', $stringErrorBody, false);
 assertTest(
-    $strErrMsg === 'Token expirado',
-    'String error in body[errors] is returned verbatim'
+    $strErrMsg === 'Não foi possível processar o pagamento: Token expirado',
+    'String error in body[errors] is shown with a clear localized prefix'
+);
+assertTest(
+    str_contains(ChargeProcessor::translateMessage('', ['errors' => 'token is invalid'], false), 'Recarregue a página da fatura')
+        && str_contains(ChargeProcessor::translateMessage('', ['errors' => 'token is invalid'], true), 'Reload the invoice page'),
+    'Iugu "token is invalid" (expired/used token, or test token with a LIVE key) becomes a reload instruction in PT and EN'
 );
 
 // Test completely empty body fallback

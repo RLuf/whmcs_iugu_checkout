@@ -246,6 +246,10 @@ async function main() {
         const log1 = JSON.stringify(s1.tblgatewaylog);
         assert(s1.tblgatewaylog.some((l) => l.result === 'Success' && l.gateway === 'iugucc') && !log1.includes(TEST_API_TOKEN), 'Gateway Log: entrada Success sem vazar o API token');
         assert((await view(inv1)).hasForm === false, 'Fatura Paid não exibe mais o botão/formulário de pagamento');
+        const invMail = addInvoice(77.00);
+        const mailHtml = await (await fetch(`${base}/sim_invoice_email.php?id=${invMail}`)).text();
+        assert(!/<script/i.test(mailHtml) && !mailHtml.includes('data-iugu') && !mailHtml.includes('iugucc-payment-form'), 'E-mail de fatura e tela de pedido concluído: _link não emite formulário de cartão nem scripts');
+        assert(mailHtml.includes(`href="${base}/viewinvoice.php?id=${invMail}"`) && /<form method="get" action="[^"]*\/viewinvoice\.php">/.test(mailHtml) && mailHtml.includes(`name="id" value="${invMail}"`), 'Fora da fatura, _link devolve botão/form GET que leva à fatura (auto-redirect do WHMCS chega na fatura)');
 
         // ======================================================================================
         section('2. Recusa da operadora e nova tentativa');
@@ -351,6 +355,12 @@ async function main() {
         const r7g = await pay(inv7, v7.signature, iugu.issueToken('approved'), 1);
         assert(r7g.status === 503 && charges().length === before, 'Módulo desativado no WHMCS → 503 (padrão "Module Not Activated")');
         mutate((s) => { s.gateways.iugucc.active = true; });
+        mutate((s) => { s.gateways.iugucc.settings.sandboxApiToken = ''; s.gateways.iugucc.settings.apiToken = 'live_token_only'; });
+        const v7h = await view(inv7);
+        assert(v7h.hasForm === false && v7h.html.includes('Modo Sandbox ativo sem Token de API de Teste'), 'Sandbox ligado só com token de produção: fatura mostra aviso claro e não exibe o formulário');
+        const r7h = await pay(inv7, v7.signature, iugu.issueToken('approved'), 1);
+        assert(r7h.status === 503 && r7h.json.lr_code === 'NOT_CONFIGURED' && charges().length === before && readState().tblgatewaylog.some((l) => l.result === 'Gateway Not Configured'), 'Callback recusa com 503 NOT_CONFIGURED: o token de produção nunca é usado no lugar do token de teste');
+        mutate((s) => { s.gateways.iugucc.settings.sandboxApiToken = TEST_API_TOKEN; s.gateways.iugucc.settings.apiToken = ''; });
         assert(foreignHosts.length === 0, 'O módulo só abriu conexões para api.iugu.com', JSON.stringify(foreignHosts));
 
         // ======================================================================================

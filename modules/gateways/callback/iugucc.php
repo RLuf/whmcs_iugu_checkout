@@ -42,6 +42,27 @@ if (empty($gatewayParams['type'])) {
 }
 
 $config = new Config($gatewayParams);
+
+if (!$config->isConfigured()) {
+    // Missing Account ID / API token, or Sandbox Mode without the Iugu TEST token. 503 makes Iugu retry
+    // webhooks later and gives the checkout UI a clear, non-card-related message.
+    logTransaction(
+        $gatewayModuleName,
+        ['sandbox_mode' => $config->isSandbox(), 'sandbox_token_missing' => $config->isSandboxTokenMissing()],
+        'Gateway Not Configured'
+    );
+    http_response_code(503);
+    header('Content-Type: application/json; charset=utf-8');
+    echo json_encode([
+        'success' => false,
+        'lr_code' => 'NOT_CONFIGURED',
+        'message' => $config->isSandboxTokenMissing()
+            ? 'Modo Sandbox ativo sem Token de API de Teste da Iugu. Configure o token de teste no gateway.'
+            : 'Credenciais da Iugu pendentes de configuração no WHMCS.',
+    ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    exit;
+}
+
 $httpClient = new IuguHttpClient($config->getActiveApiToken());
 
 // Parse incoming request (supports application/json and application/x-www-form-urlencoded)

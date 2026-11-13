@@ -21,6 +21,7 @@ return [
     'cpf_cnpj_placeholder' => '000.000.000-00',
     'installments_label' => 'Installments',
     'pay_button' => 'Pay Now with Credit Card',
+    'pay_on_invoice_button' => 'Pay with Credit Card',
     'processing_button' => 'Processing secure payment...',
     'security_notice' => 'Your card details are tokenized directly in your browser and never touch or remain stored on our server.',
     'err_invalid_card_number' => 'Invalid credit card number. Please check the digits entered.',
@@ -30,6 +31,7 @@ return [
     'err_invalid_cpf_cnpj' => 'Please enter a valid CPF (11 digits) or CNPJ (14 digits).',
     'err_tokenization_failed' => 'Could not tokenize card details with Iugu. Please check the highlighted fields.',
     'err_network' => 'Communication error while processing payment. Please check your connection and try again.',
+    'err_sandbox_token_missing' => 'Sandbox Mode is enabled without an Iugu TEST API token. Enter the Test token in the gateway settings (the production token does not accept test cards).',
     'err_not_configured' => 'This payment gateway is currently unavailable (Iugu credentials pending configuration in WHMCS).',
     'success_redirecting' => 'Payment approved! Updating your invoice and activating your services...',
 ];

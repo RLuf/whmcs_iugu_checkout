@@ -21,6 +21,7 @@ return [
     'cpf_cnpj_placeholder' => '000.000.000-00',
     'installments_label' => 'Parcelamento',
     'pay_button' => 'Pagar Agora com Cartão',
+    'pay_on_invoice_button' => 'Pagar com Cartão de Crédito',
     'processing_button' => 'Processando pagamento seguro...',
     'security_notice' => 'Seus dados de cartão são tokenizados diretamente no navegador e nunca ficam armazenados em nosso servidor.',
     'err_invalid_card_number' => 'Número do cartão de crédito inválido. Verifique os dígitos informados.',
@@ -30,6 +31,7 @@ return [
     'err_invalid_cpf_cnpj' => 'Informe um CPF (11 dígitos) ou CNPJ (14 dígitos) válido.',
     'err_tokenization_failed' => 'Não foi possível validar os dados do cartão junto à Iugu. Revise os campos destacados.',
     'err_network' => 'Falha de comunicação ao processar o pagamento. Verifique sua conexão e tente novamente.',
+    'err_sandbox_token_missing' => 'Modo Sandbox ativo sem Token de API de Teste. Informe o token do tipo Teste da Iugu na configuração do gateway (o token de produção não aceita cartões de teste).',
     'err_not_configured' => 'Este meio de pagamento está em manutenção (credenciais Iugu pendentes de configuração no WHMCS).',
     'success_redirecting' => 'Pagamento aprovado! Atualizando sua fatura e liberando seus serviços...',
 ];
