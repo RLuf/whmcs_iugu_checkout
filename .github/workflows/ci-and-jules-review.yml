@@ -51,6 +51,10 @@ jobs:
           php tests/phpunit_runner.php
           php tests/adversarial_stress_test.php
 
+      - name: Run WHMCS Billing Simulation (real callback + gateway files over HTTP)
+        run: |
+          node tests/whmcs_finance_sim.js
+
   jules-pr-review-gate:
     name: Request Jules Code Review on PR
     if: github.event_name == 'pull_request'

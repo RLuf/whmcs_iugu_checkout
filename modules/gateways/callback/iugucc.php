@@ -122,6 +122,31 @@ if ($action === 'checkout' || isset($requestData['iugu_token'])) {
         exit;
     }
 
+    // Only invoices that are still open may be charged. A checkout signature captured while the invoice
+    // was Unpaid must not be usable after it is Cancelled, Refunded, sent to Collections, back to Draft or
+    // Payment Pending: the card would be debited and WHMCS would not settle the invoice.
+    // (Paid invoices fall through to ChargeProcessor, which answers "already paid" without charging.)
+    $invoiceStatus = strtolower(trim((string) ($invoiceRow->status ?? '')));
+    if ($invoiceStatus !== 'unpaid' && $invoiceStatus !== 'paid') {
+        logTransaction(
+            $gatewayModuleName,
+            ['whmcs_invoice_id' => $invoiceId, 'invoice_status' => (string) ($invoiceRow->status ?? '')],
+            'Checkout Blocked (Invoice Not Payable)'
+        );
+        http_response_code(409);
+        echo json_encode([
+            'success' => false,
+            'invoice_id' => (string) $invoiceId,
+            'transaction_id' => '',
+            'lr_code' => 'INVOICE_NOT_PAYABLE',
+            'message' => $config->isEnglish()
+                ? 'This invoice is not open for payment. Please reload the invoice page.'
+                : 'Esta fatura não está em aberto para pagamento. Recarregue a página da fatura.',
+            'redirect_url' => null,
+        ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        exit;
+    }
+
     $clientId = (int) ($invoiceRow->userid ?? 0);
     $invoiceTotal = (string) ($invoiceRow->total ?? '0.00');
     $providedSignature = trim((string) ($requestData['signature'] ?? ''));

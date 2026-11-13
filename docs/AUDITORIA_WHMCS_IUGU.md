@@ -18,6 +18,7 @@ Fontes oficiais consultadas (texto baixado e comparado linha a linha com o códi
 | 1 | **Crítica** | `Config::IUGU_JS_URL` apontava para `https://js.iugu.net/v2`. O host **não existe** (NXDOMAIN). Em produção `window.Iugu` nunca seria definido e nenhum cliente conseguiria pagar. | `getent hosts js.iugu.net` vazio; Chromium real: `net::ERR_TUNNEL_CONNECTION_FAILED`; `https://js.iugu.com/v2` responde 200 `application/javascript` com `setAccountID`, `setTestMode`, `createPaymentToken`. | URL corrigida para `https://js.iugu.com/v2` em `Config.php`, `iugucc.js`, README, AGENTS, ARCHITECTURE. Teste de regressão em `tests/run_tests.js`. |
 | 2 | **Alta** | Cliente preso em "Processando..." para sempre quando a tokenização falha. O Iugu.js v2 tokeniza via **JSONP** (`<script src="https://api.iugu.com/v1/payment_token?...">`); em erro HTTP ele cancela o próprio timer e **nunca chama o callback**. O `iugucc.js` não tinha proteção. | Reproduzido no teste de navegador com a API da Iugu devolvendo 502: botão desabilitado e nenhuma mensagem. | Watchdog de 30 s em `iugucc.js` (`TOKENIZATION_TIMEOUT_MS`): reabilita o botão, exibe `err_network`, ignora callback tardio. Coberto por `tests/browser_checkout_e2e.js`. |
 | 3 | Média | `soft_descriptor_light` truncado em 13 caracteres; a Iugu documenta **"Até 12 caracteres"**. | Referência *Cobrança Direta*, campo `soft_descriptor_light`. | `substr(…, 0, 12)` em `Config.php`; `Size`/descrição do campo no Admin e `SCHEMA_MAPPING.md` ajustados. |
+| 5 | **Alta** | O callback cobrava o cartão em fatura **Cancelled, Refunded, Collections, Draft ou Payment Pending** quando recebia uma assinatura capturada enquanto a fatura estava em aberto. O cliente era debitado e o WHMCS não baixava a fatura (só faturas `Unpaid` viram `Paid`). | Reproduzido em `tests/whmcs_finance_sim.js` com os arquivos reais do módulo: 5 cobranças indevidas aprovadas antes da correção. | `callback/iugucc.php` só segue para a cobrança quando o status é `Unpaid`; demais status respondem `409 INVOICE_NOT_PAYABLE` e registram `Checkout Blocked (Invoice Not Payable)` no Gateway Log. |
 | 4 | Média | `items[].price_cents` abaixo de 100 era enviado à API (a Iugu exige mínimo 100 = R$ 1,00). | Referência *Cobrança Direta*, campo `items`. | `PayloadBuilder` rejeita valores < R$ 1,00 antes da chamada, com mensagem clara. Testes D.2b no stress test. |
 
 ## 2. Conformidade com o padrão de módulo de gateway WHMCS
@@ -55,7 +56,9 @@ Fontes oficiais consultadas (texto baixado e comparado linha a linha com o códi
 | Admin → Refund through Gateway (total/parcial) | ✅ |
 | Add to Client's Credit Balance / Manual Refund | ✅ (nativo WHMCS, não depende do módulo) |
 | Reverse Payment / Collections após chargeback | ⚠️ Webhook `invoice.status_changed` com `chargeback`/`in_protest` é apenas registrado no Gateway Log; a reversão deve ser feita manualmente no Admin (`Reverse Payment`). |
-| Convert To For Processing (moeda) | ✅ Padrão WHMCS; a Iugu opera em BRL |
+| Convert To For Processing (moeda) | ⚠️ **Somente BRL.** Com conversão ativa o WHMCS entrega a `_link` o valor convertido, mas o callback recalcula o saldo em `tblinvoices` (moeda do cliente); a assinatura não confere e o pagamento é recusado com 403. Instalações que faturam só em BRL não são afetadas. |
+
+Todas as linhas acima, exceto a de moeda, foram exercitadas em `tests/whmcs_finance_sim.js`: os arquivos reais `modules/gateways/iugucc.php` e `modules/gateways/callback/iugucc.php` rodam sem alteração, via HTTP, dentro de um simulador do WHMCS (dublê de teste, não é o WHMCS) com a API da Iugu reproduzida pelo contrato oficial. Resultado: **76/76 em PHP 8.1.34 e 8.2.35.**
 
 ## 3. Conformidade com a API Iugu v1
 
@@ -94,9 +97,15 @@ Isto mantém a conformidade PCI-DSS SAQ A (o cartão continua só no navegador) 
 | `tests/adversarial_suite.js` | — | — | 60/60 |
 | `tests/adversarial_webhook_test.js` | — | — | 23/23 |
 | `tests/browser_checkout_e2e.js` (Chromium + template real + Iugu.js v2 real, conta de teste) | — | — | 13/13 |
-| `tests/sandbox_e2e_iugu.php` (cobrança real em sandbox) | bloqueado | bloqueado | — |
+| `tests/whmcs_finance_sim.js` (arquivos reais do módulo em WHMCS simulado, 10 grupos de operações do Financeiro) | 76/76 | 76/76 | (orquestrador) |
+| `tests/sandbox_e2e_iugu.php` (cobrança real em sandbox) | não executado | não executado | — |
 
-**Bloqueio do E2E de cobrança:** `POST/GET /v1/payment_token` da Iugu devolveu `502 {"message":"Internal server error"}` (AWS API Gateway `InternalServerErrorException`) em todas as variantes (JSON, form-urlencoded, JSONP idêntico ao Iugu.js) a partir deste ambiente. No mesmo ambiente, o segredo de rede salvo para `api.iugu.com` está incorreto: o proxy sobrescreve o cabeçalho `Authorization` e qualquer chamada autenticada por cabeçalho recebe 401, enquanto o mesmo token via `?api_token=` recebe 200. Até o segredo ser corrigido, o E2E usa `IUGU_AUTH_MODE=query` (terceiro método oficial de autenticação) e o teste de tokenização fica dependente da Iugu.
+**Por que a cobrança real em sandbox não foi executada (dois motivos, ambos verificados):**
+
+1. **O token de API disponível é de PRODUÇÃO (LIVE).** Ele lista 5.184 faturas reais da conta, com as variáveis `id-cliente`/`id-fatura` do módulo de boleto. Rodar `POST /v1/charge` com ele criaria faturas reais na conta de produção, o que as regras deste repositório proíbem. Com ele só foram feitas leituras (`GET /v1/invoices?limit=…`, `GET /v1/accounts/{id}`); nenhuma cobrança, fatura ou cliente foi criado. O script agora exige `IUGU_E2E_CONFIRM_TEST_TOKEN=yes` para rodar.
+2. **O segredo de rede salvo no ambiente de nuvem para `api.iugu.com` está incorreto.** O proxy injeta esse valor no cabeçalho `Authorization` de toda requisição ao host: chamadas autenticadas por cabeçalho recebem 401 (o mesmo token por `?api_token=` recebe 200) e `/v1/payment_token`, que não usa autenticação, responde 502. A mesma requisição de tokenização feita de fora do ambiente devolveu um token de teste válido (`"test":true`, bandeira VISA), ou seja, a Iugu e a conta estão funcionando. Remover esse segredo nas configurações do ambiente destrava a tokenização real no navegador de teste.
+
+Para a cobrança real em sandbox falta apenas um **token de TESTE** da Iugu (tipo *Teste* em Alia → Configurações → Integrações API).
 
 ## 6. Como reproduzir
 
@@ -108,7 +117,10 @@ node tests/run_tests.js && node tests/adversarial_suite.js && node tests/adversa
 # Navegador real (Chromium/Playwright) contra Iugu.js v2 em modo teste
 IUGU_ACCOUNT_ID=<account_id> node tests/browser_checkout_e2e.js
 
-# Cobrança real em sandbox com as classes do módulo (token TEST da Iugu)
-IUGU_ACCOUNT_ID=<account_id> IUGU_API_TOKEN=<test_token> php tests/sandbox_e2e_iugu.php
+# Operações do Financeiro do WHMCS com os arquivos reais do módulo (sem rede externa)
+node tests/whmcs_finance_sim.js            # PHP_BIN=php8.1 para escolher o interpretador
+
+# Cobrança real em sandbox com as classes do módulo (SOMENTE token de TESTE da Iugu)
+IUGU_E2E_CONFIRM_TEST_TOKEN=yes IUGU_ACCOUNT_ID=<account_id> IUGU_API_TOKEN=<test_token> php tests/sandbox_e2e_iugu.php
 # atrás de proxy que reescreve Authorization: IUGU_AUTH_MODE=query
 ```

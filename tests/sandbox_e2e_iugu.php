@@ -11,7 +11,8 @@
  *
  * Requires environment variables (never written to files or logs):
  *   IUGU_ACCOUNT_ID   32-hex Account ID (public, used by Iugu.js)
- *   IUGU_API_TOKEN    Iugu TEST API token (or the placeholder "proxy-injected" when a network proxy injects it)
+ *   IUGU_API_TOKEN    Iugu TEST API token (never a LIVE token)
+ *   IUGU_E2E_CONFIRM_TEST_TOKEN=yes   explicit confirmation that the token above is a TEST token
  * Optional:
  *   IUGU_E2E_DECLINE_CARD  card number that the Iugu sandbox declines (to exercise the LR path)
  *
@@ -36,6 +37,14 @@ $declineCard = trim((string) (getenv('IUGU_E2E_DECLINE_CARD') ?: ''));
 
 if ($accountId === '' || $apiToken === '') {
     echo "SKIP: IUGU_ACCOUNT_ID / IUGU_API_TOKEN not set — sandbox E2E not executed.\n";
+    exit(0);
+}
+
+// Safety interlock: this script CREATES CHARGES. A LIVE token would create real invoices in the
+// production Iugu account, so the operator must state explicitly that IUGU_API_TOKEN is a TEST token.
+if (strtolower(trim((string) getenv('IUGU_E2E_CONFIRM_TEST_TOKEN'))) !== 'yes') {
+    echo "SKIP: set IUGU_E2E_CONFIRM_TEST_TOKEN=yes only when IUGU_API_TOKEN is an Iugu TEST token.\n";
+    echo "      Never run this script with a LIVE (production) token.\n";
     exit(0);
 }
 

@@ -106,7 +106,9 @@ flowchart LR
     ├── adversarial_stress_test.php     # Testes adversariais de stress (PHP 8.1/8.2)
     ├── browser_checkout_e2e.js         # E2E em Chromium: template real + Iugu.js v2 (conta de teste)
     ├── browser/render_checkout.php     # Renderiza o template do checkout fora do WHMCS para o E2E
-    ├── sandbox_e2e_iugu.php            # Cobrança/estorno reais em sandbox com as classes do módulo
+    ├── whmcs_finance_sim.js            # Operações do Financeiro do WHMCS com os arquivos reais do módulo
+    ├── whmcs_sim/stubs/                # Simulador do WHMCS (dublê de teste) usado pela simulação acima
+    ├── sandbox_e2e_iugu.php            # Cobrança/estorno reais em sandbox (somente token de TESTE)
     ├── phpunit_runner.php              # Runner nativo para PHP 8.1/8.2 CLI
     └── fixtures/                       # Payloads de simulação da API Iugu
 ```
@@ -123,6 +125,7 @@ find modules scripts tests -name "*.php" -print0 | xargs -0 -n1 php -l
 php scripts/sentinel-autosetup.php && node scripts/sentinel-autosetup.js
 node tests/run_tests.js && node tests/adversarial_suite.js && node tests/adversarial_webhook_test.js
 php tests/phpunit_runner.php && php tests/adversarial_stress_test.php
+node tests/whmcs_finance_sim.js   # fatura, parcial, crédito, Mass Pay, Add Funds, gatilhos, reembolso, status
 ```
 
 ---
@@ -166,3 +169,5 @@ node scripts/bump-version.js patch
 
 ### Cloud Review & Testing Environment (Claude Code)
 A dedicated cloud environment acts as **reviewer and tester**, validating compatibility with WHMCS 8.13.7 and the Iugu API v1 without touching production servers. `scripts/cloud-env-setup.sh` provisions the container (PHP 8.1 and 8.2 CLI with `curl`, `json`, `mbstring`, `openssl`; the `archived/` directory; strict lint on both versions; Sentinel AutoSetup). Allowed network hosts, non-secret variables and the secrets policy are documented in section 5 of [`AGENTS.md`](./AGENTS.md). Iugu.js v2 is loaded from its official host `https://js.iugu.com/v2`; the host `js.iugu.net` does not exist and is rejected by a regression test.
+
+`node tests/whmcs_finance_sim.js` runs the real gateway and callback files over HTTP inside a WHMCS simulator (a test double) against an Iugu API double built from the official contract. It covers every billing operation WHMCS exposes to a third-party gateway: invoice payment, declines and retries, partial payments, applied credit, Mass Payment, Add Funds, installment limits, every invoice status, webhooks, admin refunds and chargebacks. The compliance report is in [`docs/AUDITORIA_WHMCS_IUGU.md`](./docs/AUDITORIA_WHMCS_IUGU.md). Never run any test with a LIVE Iugu token.

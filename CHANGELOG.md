@@ -10,6 +10,13 @@ O formato é baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.
 ### Fixed (Corrigido)
 - **URL oficial do Iugu.js v2 (`Config::IUGU_JS_URL`)**: o módulo carregava a biblioteca de tokenização de `https://js.iugu.net/v2`, host que **não existe no DNS** (NXDOMAIN). Em produção o navegador nunca definiria `window.Iugu` e todo checkout falharia com "Biblioteca Iugu.js não carregada". Corrigido para `https://js.iugu.com/v2`, host oficial que serve o bundle com `setAccountID`, `setTestMode` e `createPaymentToken` (verificado em Chromium real via Playwright). Referências ajustadas em `iugucc.js`, `README.md`, `AGENTS.md` e `docs/ARCHITECTURE.md`.
 
+### Fixed (Corrigido) — simulação do Financeiro 2026-11-13
+- **Cobrança em fatura que não está em aberto (`callback/iugucc.php`)**: com uma assinatura capturada enquanto a fatura estava `Unpaid`, o callback cobrava o cartão mesmo depois de a fatura virar `Cancelled`, `Refunded`, `Collections`, `Draft` ou `Payment Pending`; o cliente era debitado e a fatura não era baixada. Agora só faturas `Unpaid` seguem para a cobrança; as demais respondem `409 INVOICE_NOT_PAYABLE` e geram a entrada `Checkout Blocked (Invoice Not Payable)` no Gateway Log.
+
+### Added (Adicionado) — simulação do Financeiro 2026-11-13
+- **`tests/whmcs_finance_sim.js` + `tests/whmcs_sim/stubs/`**: executa os arquivos reais do módulo (`iugucc_link`, `iugucc_refund`, callback síncrono e gatilhos) via HTTP dentro de um simulador do WHMCS, com a API da Iugu reproduzida pelo contrato oficial atrás de TLS local. Cobre fatura comum, recusa e nova tentativa, token de uso único, pagamento parcial, crédito aplicado, Mass Payment, Add Funds, limites de parcelamento, todos os status de fatura, assinatura/PCI/módulo inativo, gatilhos (idempotência, falsificação, conta errada, fatura do módulo de boleto, segredo), reembolso total/parcial pelo Admin e chargeback. 76 asserções em PHP 8.1 e 8.2; incluído na CI.
+- **Trava de segurança em `tests/sandbox_e2e_iugu.php`**: só cria cobranças com `IUGU_E2E_CONFIRM_TEST_TOKEN=yes`, para impedir execução acidental com token de produção.
+
 ### Fixed (Corrigido) — auditoria 2026-11-12
 - **Cliente preso em "Processando..." (`iugucc.js`)**: o Iugu.js v2 tokeniza via JSONP e, em erro HTTP da API, nunca chama o callback. Adicionado watchdog de 30 s (`TOKENIZATION_TIMEOUT_MS`) que reabilita o botão, exibe `err_network` e ignora respostas tardias. Reproduzido e validado em Chromium real (`tests/browser_checkout_e2e.js`).
 - **`soft_descriptor_light` com 13 caracteres**: a Iugu aceita até 12. `Config.php`, campo do Admin e `SCHEMA_MAPPING.md` ajustados.

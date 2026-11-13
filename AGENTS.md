@@ -50,13 +50,17 @@ find modules scripts tests -name "*.php" -print0 | xargs -0 -n1 php -l
 php scripts/sentinel-autosetup.php && node scripts/sentinel-autosetup.js
 node tests/run_tests.js && node tests/adversarial_suite.js && node tests/adversarial_webhook_test.js
 php tests/phpunit_runner.php && php tests/adversarial_stress_test.php
+node tests/whmcs_finance_sim.js   # Financeiro do WHMCS com os arquivos reais do módulo (PHP_BIN=php8.1|php8.2)
 ```
 
 Testes que exigem a conta de **teste** da Iugu (nunca produção) e rede para `api.iugu.com` / `js.iugu.com`:
 ```bash
 IUGU_ACCOUNT_ID=<account_id> node tests/browser_checkout_e2e.js                      # Chromium + template real + Iugu.js v2
-IUGU_ACCOUNT_ID=<account_id> IUGU_API_TOKEN=<test_token> php tests/sandbox_e2e_iugu.php  # cobrança real em sandbox
+IUGU_E2E_CONFIRM_TEST_TOKEN=yes IUGU_ACCOUNT_ID=<account_id> IUGU_API_TOKEN=<test_token> php tests/sandbox_e2e_iugu.php  # cobrança real em sandbox
 ```
+> **Token de produção (LIVE) é proibido em qualquer teste.** Um token LIVE lista as faturas reais da conta e `POST /v1/charge` criaria cobranças reais. Antes de usar um token, confirme que é do tipo *Teste*. O token usado pelo módulo de boleto existente é de produção.
+
+Regra de negócio fixada por teste: o callback só cobra faturas com status `Unpaid`; qualquer outro status responde `409 INVOICE_NOT_PAYABLE`.
 O relatório de conformidade (WHMCS × Iugu) e a lista de limitações do tipo *Third-Party* estão em `docs/AUDITORIA_WHMCS_IUGU.md`.
 
 ---
