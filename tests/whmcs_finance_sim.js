@@ -419,11 +419,14 @@ async function main() {
         php.kill();
         await new Promise((r) => iuguServer.close(r));
         await new Promise((r) => proxy.close(r));
-        if (/PHP (Warning|Notice|Deprecated|Fatal)/.test(phpLog)) {
-            failed++; failures.push('PHP emitted warnings/errors during the simulation');
-            console.error('\n--- PHP diagnostics ---\n' + phpLog.split('\n').filter((l) => /PHP (Warning|Notice|Deprecated|Fatal)/.test(l)).slice(0, 15).join('\n'));
+        // Only diagnostics raised by code under the simulated WHMCS root count (module + stubs).
+        // Interpreter start-up notices ("... in Unknown on line 0", e.g. JIT vs. a debugger extension on CI) do not.
+        const phpDiagnostics = phpLog.split('\n').filter((l) => /PHP (Warning|Notice|Deprecated|Fatal error|Parse error)/.test(l) && l.includes(simRoot));
+        if (phpDiagnostics.length > 0) {
+            failed++; failures.push('PHP emitted warnings/errors from module or simulator code');
+            console.error('\n--- PHP diagnostics ---\n' + phpDiagnostics.slice(0, 15).join('\n'));
         } else {
-            passed++; console.log('\n  \x1b[32m✓\x1b[0m Nenhum Warning/Notice/Deprecated/Fatal do PHP durante toda a simulação');
+            passed++; console.log('\n  \x1b[32m✓\x1b[0m Nenhum Warning/Notice/Deprecated/Fatal do PHP vindo do módulo ou do simulador');
         }
         fs.rmSync(tmp, { recursive: true, force: true });
     }
