@@ -201,18 +201,26 @@ final class ChargeProcessor
                 );
 
                 // Ensure transaction uniqueness and record payment in WHMCS (triggers service provisioning)
-                if (isset($whmcsCallbacks['checkCbTransID']) && is_callable($whmcsCallbacks['checkCbTransID'])) {
-                    ($whmcsCallbacks['checkCbTransID'])($iuguInvoiceId);
+                // Guard against race condition where async webhook finished while POST /v1/charge was in-flight
+                $alreadyRecordedByWebhook = false;
+                if (isset($whmcsCallbacks['isTransactionRecorded']) && is_callable($whmcsCallbacks['isTransactionRecorded'])) {
+                    $alreadyRecordedByWebhook = (($whmcsCallbacks['isTransactionRecorded'])($iuguInvoiceId) === true);
                 }
 
-                if (isset($whmcsCallbacks['addInvoicePayment']) && is_callable($whmcsCallbacks['addInvoicePayment'])) {
-                    ($whmcsCallbacks['addInvoicePayment'])(
-                        (int) $invoiceId,
-                        $iuguInvoiceId,
-                        (float) $amount,
-                        $gatewayFee,
-                        Config::GATEWAY_NAME
-                    );
+                if (!$alreadyRecordedByWebhook) {
+                    if (isset($whmcsCallbacks['checkCbTransID']) && is_callable($whmcsCallbacks['checkCbTransID'])) {
+                        ($whmcsCallbacks['checkCbTransID'])($iuguInvoiceId);
+                    }
+
+                    if (isset($whmcsCallbacks['addInvoicePayment']) && is_callable($whmcsCallbacks['addInvoicePayment'])) {
+                        ($whmcsCallbacks['addInvoicePayment'])(
+                            (int) $invoiceId,
+                            $iuguInvoiceId,
+                            (float) $amount,
+                            $gatewayFee,
+                            Config::GATEWAY_NAME
+                        );
+                    }
                 }
 
                 return [
@@ -289,7 +297,14 @@ final class ChargeProcessor
         // Check if Iugu returned specific field errors
         if (!empty($body['errors'])) {
             if (is_string($body['errors'])) {
-                return $body['errors'];
+                $raw = trim($body['errors']);
+                if (stripos($raw, 'token') !== false && stripos($raw, 'invalid') !== false) {
+                    // Iugu: single-use card token already consumed/expired, or test token used with a LIVE key.
+                    return $isEnglish
+                        ? 'The card validation expired or is no longer valid. Reload the invoice page and enter the card details again.'
+                        : 'A validação do cartão expirou ou não é mais válida. Recarregue a página da fatura e informe os dados do cartão novamente.';
+                }
+                return ($isEnglish ? 'Payment could not be processed: ' : 'Não foi possível processar o pagamento: ') . $raw;
             }
             if (is_array($body['errors'])) {
                 $flatErrors = [];
@@ -345,7 +360,22 @@ final class ChargeProcessor
      */
     private function logToWhmcs(array $whmcsCallbacks, array $data, string $status): void
     {
-        if (isset($whmcsCallbacks['logTransaction']) && is_callable($whmcsCallbacks['logTransaction'])) {
+        if ( isset($whmcsCallbacks['logTransaction']) && is_callable($whmcsCallbacks['logTransaction'])) {
+            if (!$this->config->isDebugLoggingEnabled() && !$this->config->isSentinelModeEnabled() && $status !== 'PCI Violation Blocked') {
+                return;
+            }
+            if ($this->config->isSentinelModeEnabled()) {
+                $lr = (string) ($data['lr_code'] ?? ($status === 'PCI Violation Blocked' ? 'PCI_BLOCKED' : ''));
+                $data['sentinel_audit'] = SentinelAuditor::buildSupportDiagnostic(
+                    $lr,
+                    'checkout_charge_' . strtolower(str_replace(' ', '_', $status)),
+                    $this->config->isSandbox(),
+                    [
+                        'whmcs_invoice_id' => $data['whmcs_invoice_id'] ?? $data['invoice_id'] ?? '',
+                        'iugu_invoice_id' => $data['iugu_invoice_id'] ?? '',
+                    ]
+                );
+            }
             $sanitized = PciSanitizer::sanitize($data);
             ($whmcsCallbacks['logTransaction'])(Config::GATEWAY_NAME, $sanitized, $status);
         }

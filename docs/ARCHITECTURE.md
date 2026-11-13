@@ -10,7 +10,7 @@ Este documento descreve a arquitetura interna, o fluxo de segurança PCI-DSS e o
 flowchart TD
     subgraph Browser["Navegador do Cliente (viewinvoice.php)"]
         Form["Formulário de Cartão (checkout.php)<br/>Sem atributo name='' nos inputs de cartão"]
-        IuguJS["Iugu.js v2 (https://js.iugu.net/v2)"]
+        IuguJS["Iugu.js v2 (https://js.iugu.com/v2)"]
         Controller["Controller JS (iugucc.js)"]
     end
 

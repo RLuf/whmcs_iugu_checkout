@@ -75,7 +75,41 @@ function main() {
             /define\('IUGUCC_MODULE_VERSION',\s*'[^']+'\);/,
             `define('IUGUCC_MODULE_VERSION', '${nextVersion}');`
         );
+        content = content.replace(
+            /@version\s+\d+\.\d+\.\d+/,
+            `@version    ${nextVersion}`
+        );
         fs.writeFileSync(gatewayFile, content, 'utf8');
+    }
+
+    // 4. Update modules/gateways/iugucc/whmcs.json if present
+    const whmcsJsonFile = path.join(ROOT, 'modules', 'gateways', 'iugucc', 'whmcs.json');
+    if (fs.existsSync(whmcsJsonFile)) {
+        archiveFile(whmcsJsonFile);
+        const whmcsData = JSON.parse(fs.readFileSync(whmcsJsonFile, 'utf8'));
+        whmcsData.version = nextVersion;
+        fs.writeFileSync(whmcsJsonFile, JSON.stringify(whmcsData, null, 4) + '\n', 'utf8');
+    }
+
+    // 5. Update User-Agent in modules/gateways/iugucc/lib/IuguHttpClient.php
+    const httpClientFile = path.join(ROOT, 'modules', 'gateways', 'iugucc', 'lib', 'IuguHttpClient.php');
+    if (fs.existsSync(httpClientFile)) {
+        archiveFile(httpClientFile);
+        let content = fs.readFileSync(httpClientFile, 'utf8');
+        content = content.replace(
+            /WHMCS-IuguCC-Gateway\/\d+\.\d+\.\d+/,
+            `WHMCS-IuguCC-Gateway/${nextVersion}`
+        );
+        fs.writeFileSync(httpClientFile, content, 'utf8');
+    }
+
+    // 6. Update asset cache busters in modules/gateways/iugucc/templates/checkout.php
+    const checkoutTplFile = path.join(ROOT, 'modules', 'gateways', 'iugucc', 'templates', 'checkout.php');
+    if (fs.existsSync(checkoutTplFile)) {
+        archiveFile(checkoutTplFile);
+        let content = fs.readFileSync(checkoutTplFile, 'utf8');
+        content = content.replace(/\?v=\d+\.\d+\.\d+/g, `?v=${nextVersion}`);
+        fs.writeFileSync(checkoutTplFile, content, 'utf8');
     }
 
     console.log(`Version bumped: ${currentVersion} -> ${nextVersion}`);

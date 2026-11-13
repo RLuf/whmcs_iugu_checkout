@@ -1,0 +1,36 @@
+{
+    "schema": "1.0",
+    "type": "whmcs-gateways",
+    "name": "iugucc",
+    "version": "1.1.0",
+    "license": "MIT",
+    "category": "payments",
+    "description": {
+        "name": "Iugu - Cartão de Crédito",
+        "tagline": "Checkout transparente de cartão de crédito na própria fatura, com parcelamento e estorno.",
+        "long": "Receba por cartão de crédito sem tirar o cliente da fatura do WHMCS. O cartão é tokenizado no navegador pelo Iugu.js e nunca passa pelo seu servidor.",
+        "features": [
+            "Pagamento na própria fatura, com baixa imediata",
+            "Parcelamento de 1x a 12x com parcela mínima",
+            "Estorno total ou parcial pelo Admin",
+            "Retorno automático por gatilho da Iugu",
+            "Cartão tokenizado no navegador (PCI-DSS SAQ A)",
+            "Convive com o módulo Iugu de boleto"
+        ]
+    },
+    "logo": {
+        "filename": "logo.png"
+    },
+    "support": {
+        "homepage": "https://imovelsite.com.br",
+        "learn_more": "https://github.com/RLuf/whmcs_iugu_checkout",
+        "docs_url": "https://github.com/RLuf/whmcs_iugu_checkout/blob/main/docs/INSTALLATION_WHMCS.md",
+        "support_url": "https://github.com/RLuf/whmcs_iugu_checkout/issues"
+    },
+    "authors": [
+        {
+            "name": "RLuf / ImovelSite",
+            "homepage": "https://imovelsite.com.br"
+        }
+    ]
+}

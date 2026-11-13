@@ -14,7 +14,7 @@ final class Config
 {
     public const GATEWAY_NAME = 'iugucc';
     public const API_BASE_URL = 'https://api.iugu.com/v1';
-    public const IUGU_JS_URL  = 'https://js.iugu.net/v2';
+    public const IUGU_JS_URL  = 'https://js.iugu.com/v2';
 
     private string $accountId;
     private string $apiToken;
@@ -27,6 +27,7 @@ final class Config
     private string $webhookSecret;
     private string $cpfCustomFieldName;
     private bool $debugLogging;
+    private bool $sentinelMode;
     private string $language;
 
     /**
@@ -46,10 +47,11 @@ final class Config
         $this->minInstallmentValue = max(1.0, $minVal);
 
         $this->invoiceDescription = trim((string) ($params['invoiceDescription'] ?? 'Fatura #{invoice_id} - imovelsite.com.br'));
-        $this->statementDescriptor = substr(trim((string) ($params['statementDescriptor'] ?? 'IMOVELSITE')), 0, 13);
+        $this->statementDescriptor = substr(trim((string) ($params['statementDescriptor'] ?? 'IMOVELSITE')), 0, 12); // Iugu soft_descriptor_light: max 12 chars
         $this->webhookSecret = trim((string) ($params['webhookSecret'] ?? ''));
         $this->cpfCustomFieldName = trim((string) ($params['cpfCustomField'] ?? 'CPF/CNPJ'));
         $this->debugLogging = $this->parseBool($params['debugLogging'] ?? true);
+        $this->sentinelMode = $this->parseBool($params['sentinelMode'] ?? true);
         $this->language = strtolower(trim((string) ($params['language'] ?? $params['clientdetails']['language'] ?? 'portuguese-br')));
     }
 
@@ -65,14 +67,23 @@ final class Config
 
     /**
      * Returns the active API token depending on whether Sandbox Mode is enabled.
-     * Falls back to apiToken if sandboxApiToken is empty in Sandbox mode.
+     *
+     * Sandbox Mode uses ONLY the Iugu TEST token. There is no fallback to the LIVE token: Iugu keeps test and
+     * production isolated, so a card tokenized with Iugu.setTestMode(true) is rejected by a LIVE token with
+     * HTTP 400 {"errors":"token is invalid"} (measured against the Iugu API). Falling back would make every
+     * sandbox checkout fail with a misleading card error.
      */
     public function getActiveApiToken(): string
     {
-        if ($this->sandboxMode && $this->sandboxApiToken !== '') {
-            return $this->sandboxApiToken;
-        }
-        return $this->apiToken;
+        return $this->sandboxMode ? $this->sandboxApiToken : $this->apiToken;
+    }
+
+    /**
+     * True when Sandbox Mode is enabled but the Iugu TEST API token was not provided.
+     */
+    public function isSandboxTokenMissing(): bool
+    {
+        return $this->sandboxMode && $this->sandboxApiToken === '';
     }
 
     public function isConfigured(): bool
@@ -108,6 +119,11 @@ final class Config
     public function isDebugLoggingEnabled(): bool
     {
         return $this->debugLogging;
+    }
+
+    public function isSentinelModeEnabled(): bool
+    {
+        return $this->sentinelMode;
     }
 
     public function isEnglish(): bool

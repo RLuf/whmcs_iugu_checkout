@@ -118,5 +118,14 @@ $whResult = $webhookHandler->handle(
 );
 assertCheck($whResult['http_code'] === 200 && $whResult['action'] === 'payment_recorded', 'WebhookHandler records unpaid invoice payment');
 
+// Sandbox / production token selection (no silent fallback to the LIVE token)
+$sandboxNoToken = new Config(['accountId' => 'A1B2C3D4E5F60718293A4B5C6D7E8F90', 'apiToken' => 'live_token_abc', 'sandboxMode' => 'on']);
+assertCheck($sandboxNoToken->getActiveApiToken() === '' && $sandboxNoToken->isConfigured() === false && $sandboxNoToken->isSandboxTokenMissing() === true, 'Sandbox Mode without a TEST token is not configured and never falls back to the LIVE token');
+$sandboxWithToken = new Config(['accountId' => 'A1B2C3D4E5F60718293A4B5C6D7E8F90', 'apiToken' => 'live_token_abc', 'sandboxApiToken' => 'test_token_xyz', 'sandboxMode' => 'on']);
+assertCheck($sandboxWithToken->getActiveApiToken() === 'test_token_xyz' && $sandboxWithToken->isConfigured() === true, 'Sandbox Mode uses the TEST token');
+$liveConfig = new Config(['accountId' => 'A1B2C3D4E5F60718293A4B5C6D7E8F90', 'apiToken' => 'live_token_abc', 'sandboxApiToken' => 'test_token_xyz', 'sandboxMode' => '']);
+assertCheck($liveConfig->getActiveApiToken() === 'live_token_abc' && $liveConfig->isSandboxTokenMissing() === false, 'Production mode uses the LIVE token');
+assertCheck(str_contains(ChargeProcessor::translateMessage('', ['errors' => 'token is invalid'], false), 'Recarregue'), 'Iugu "token is invalid" is shown to the customer as a clear reload instruction');
+
 echo "\nTotal: {$passed} passed, {$failed} failed.\n";
 exit($failed > 0 ? 1 : 0);

@@ -42,6 +42,27 @@ if (empty($gatewayParams['type'])) {
 }
 
 $config = new Config($gatewayParams);
+
+if (!$config->isConfigured()) {
+    // Missing Account ID / API token, or Sandbox Mode without the Iugu TEST token. 503 makes Iugu retry
+    // webhooks later and gives the checkout UI a clear, non-card-related message.
+    logTransaction(
+        $gatewayModuleName,
+        ['sandbox_mode' => $config->isSandbox(), 'sandbox_token_missing' => $config->isSandboxTokenMissing()],
+        'Gateway Not Configured'
+    );
+    http_response_code(503);
+    header('Content-Type: application/json; charset=utf-8');
+    echo json_encode([
+        'success' => false,
+        'lr_code' => 'NOT_CONFIGURED',
+        'message' => $config->isSandboxTokenMissing()
+            ? 'Modo Sandbox ativo sem Token de API de Teste da Iugu. Configure o token de teste no gateway.'
+            : 'Credenciais da Iugu pendentes de configuração no WHMCS.',
+    ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    exit;
+}
+
 $httpClient = new IuguHttpClient($config->getActiveApiToken());
 
 // Parse incoming request (supports application/json and application/x-www-form-urlencoded)
@@ -122,12 +143,53 @@ if ($action === 'checkout' || isset($requestData['iugu_token'])) {
         exit;
     }
 
+    // Only invoices that are still open may be charged. A checkout signature captured while the invoice
+    // was Unpaid must not be usable after it is Cancelled, Refunded, sent to Collections, back to Draft or
+    // Payment Pending: the card would be debited and WHMCS would not settle the invoice.
+    // (Paid invoices fall through to ChargeProcessor, which answers "already paid" without charging.)
+    $invoiceStatus = strtolower(trim((string) ($invoiceRow->status ?? '')));
+    if ($invoiceStatus !== 'unpaid' && $invoiceStatus !== 'paid') {
+        logTransaction(
+            $gatewayModuleName,
+            ['whmcs_invoice_id' => $invoiceId, 'invoice_status' => (string) ($invoiceRow->status ?? '')],
+            'Checkout Blocked (Invoice Not Payable)'
+        );
+        http_response_code(409);
+        echo json_encode([
+            'success' => false,
+            'invoice_id' => (string) $invoiceId,
+            'transaction_id' => '',
+            'lr_code' => 'INVOICE_NOT_PAYABLE',
+            'message' => $config->isEnglish()
+                ? 'This invoice is not open for payment. Please reload the invoice page.'
+                : 'Esta fatura não está em aberto para pagamento. Recarregue a página da fatura.',
+            'redirect_url' => null,
+        ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        exit;
+    }
+
     $clientId = (int) ($invoiceRow->userid ?? 0);
     $invoiceTotal = (string) ($invoiceRow->total ?? '0.00');
     $providedSignature = trim((string) ($requestData['signature'] ?? ''));
 
-    // Verify HMAC-SHA256 checkout signature
-    if (!$config->verifyCheckoutSignature($invoiceId, $clientId, $invoiceTotal, $providedSignature)) {
+    // Compute remaining balance in case the invoice has partial credit or prior partial payments
+    $paidSum = 0.0;
+    if (class_exists(Capsule::class)) {
+        $paidIn = (float) Capsule::table('tblaccounts')->where('invoiceid', $invoiceId)->sum('amountin');
+        $paidOut = (float) Capsule::table('tblaccounts')->where('invoiceid', $invoiceId)->sum('amountout');
+        $paidSum = max(0.0, $paidIn - $paidOut);
+    }
+    $calculatedBalance = number_format(max(0.0, ((float) $invoiceTotal) - $paidSum), 2, '.', '');
+
+    // Verify HMAC-SHA256 checkout signature against authoritative balance or total
+    $verifiedAmount = null;
+    if ($config->verifyCheckoutSignature($invoiceId, $clientId, $calculatedBalance, $providedSignature)) {
+        $verifiedAmount = (float) $calculatedBalance;
+    } elseif ($config->verifyCheckoutSignature($invoiceId, $clientId, $invoiceTotal, $providedSignature)) {
+        $verifiedAmount = (float) $invoiceTotal;
+    }
+
+    if ($verifiedAmount === null) {
         http_response_code(403);
         echo json_encode([
             'success' => false,
@@ -145,7 +207,7 @@ if ($action === 'checkout' || isset($requestData['iugu_token'])) {
     $result = $processor->processCharge(
         $requestData,
         $invoiceId,
-        (float) $invoiceTotal,
+        $verifiedAmount,
         $clientRow,
         $whmcsCallbacks
     );

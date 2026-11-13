@@ -1,7 +1,7 @@
 {
     "name": "rluf/whmcs-iugu-checkout",
     "description": "Commercial-ready WHMCS 8.13.7 Credit Card Payment Gateway Module with Iugu.js client-side tokenization and webhook provisioning",
-    "version": "1.0.0",
+    "version": "1.1.0",
     "type": "whmcs-gateway",
     "license": "MIT",
     "authors": [
