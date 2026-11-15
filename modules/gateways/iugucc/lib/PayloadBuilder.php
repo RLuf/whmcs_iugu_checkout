@@ -36,17 +36,25 @@ final class PayloadBuilder
         float|string $amount,
         array $client,
         int $installments = 1,
-        string $companyName = 'imovelsite.com.br'
+        string $companyName = 'imovelsite.com.br',
+        string $customerPaymentMethodId = '',
+        string $customerId = ''
     ): array {
         $cleanToken = trim($iuguToken);
-        if ($cleanToken === '') {
-            throw new InvalidArgumentException('Iugu payment token (iugu_token) is required.');
+        $cleanPmId = trim($customerPaymentMethodId);
+        if ($cleanPmId === '' && str_starts_with($cleanToken, 'pm:')) {
+            $cleanPmId = trim(substr($cleanToken, 3));
+            $cleanToken = '';
+        }
+        if ($cleanToken === '' && $cleanPmId === '') {
+            throw new InvalidArgumentException('Iugu payment token (iugu_token) or saved payment method is required.');
         }
 
         $floatAmount = round((float) $amount, 2);
         $priceCents = (int) round($floatAmount * 100);
-        if ($priceCents <= 0) {
-            throw new InvalidArgumentException('Invoice amount must be greater than zero.');
+        if ($priceCents < 100) {
+            // Iugu POST /v1/charge: items[].price_cents minimum is 100 (R$ 1,00)
+            throw new InvalidArgumentException('Invoice amount must be at least R$ 1,00 (Iugu minimum price_cents = 100).');
         }
 
         $validInstallments = max(1, min($config->getMaxInstallments(), $installments));
@@ -102,8 +110,9 @@ final class PayloadBuilder
             ];
         }
 
-        $payload = [
-            'token' => $cleanToken,
+        $payload = ($cleanPmId !== ''
+            ? ['customer_payment_method_id' => $cleanPmId]
+            : ['token' => $cleanToken]) + [
             'email' => $email,
             'months' => $validInstallments,
             'keep_dunning' => false,
@@ -132,6 +141,11 @@ final class PayloadBuilder
             ],
         ];
 
+        $cleanCustomerId = trim($customerId);
+        if ($cleanCustomerId !== '') {
+            $payload['customer_id'] = $cleanCustomerId;
+        }
+
         if ($config->getStatementDescriptor() !== '') {
             $payload['soft_descriptor_light'] = $config->getStatementDescriptor();
         }
@@ -144,7 +158,7 @@ final class PayloadBuilder
      *
      * @param array<string, mixed> $client
      */
-    public static function extractCpfCnpj(array $client, string $preferredFieldName = 'CPF/CNPJ'): string
+    public static function extractCpfCnpj(array $client, string $preferredFieldName = 'CPF ou CNPJ'): string
     {
         // 1. Direct override or tax_id field
         $candidates = [
@@ -161,31 +175,106 @@ final class PayloadBuilder
             }
         }
 
-        // 2. Inspect WHMCS customfields array
+        // 2. Inspect WHMCS customfields array (prioritize preferredFieldName match first, then Mod-11 valid, then length)
         if (!empty($client['customfields']) && is_array($client['customfields'])) {
-            foreach ($client['customfields'] as $customField) {
-                if (!is_array($customField)) {
+            $normalizedPref = strtolower(trim($preferredFieldName));
+            $fallbackCandidate = '';
+
+            foreach ($client['customfields'] as $key => $customField) {
+                if (is_array($customField)) {
+                    $fieldName = strtolower(trim((string) ($customField['name'] ?? $customField['fieldname'] ?? $customField['title'] ?? $key)));
+                    $val = self::digitsOnly((string) ($customField['value'] ?? ''));
+                } else {
+                    $fieldName = strtolower(trim((string) $key));
+                    $val = self::digitsOnly((string) $customField);
+                }
+                if (strlen($val) !== 11 && strlen($val) !== 14) {
                     continue;
                 }
-                $val = self::digitsOnly((string) ($customField['value'] ?? ''));
-                if (strlen($val) === 11 || strlen($val) === 14) {
+                if (($normalizedPref !== '' && $fieldName === $normalizedPref) || str_contains($fieldName, 'cpf') || str_contains($fieldName, 'cnpj')) {
                     return $val;
                 }
+                if (self::isValidCpfOrCnpj($val)) {
+                    return $val;
+                }
+                if ($fallbackCandidate === '') {
+                    $fallbackCandidate = $val;
+                }
+            }
+
+            if ($fallbackCandidate !== '') {
+                return $fallbackCandidate;
             }
         }
 
-        // 3. Inspect customfields1, customfields2...
+        // 3. Inspect customfields1, customfields2... (prefer Mod-11 valid CPF/CNPJ over 11-digit mobile phone numbers)
+        $fallbackIndexed = '';
         for ($i = 1; $i <= 10; $i++) {
             $key = 'customfields' . $i;
             if (isset($client[$key])) {
                 $val = self::digitsOnly((string) $client[$key]);
                 if (strlen($val) === 11 || strlen($val) === 14) {
-                    return $val;
+                    if (self::isValidCpfOrCnpj($val)) {
+                        return $val;
+                    }
+                    if ($fallbackIndexed === '') {
+                        $fallbackIndexed = $val;
+                    }
                 }
             }
         }
 
-        return '';
+        return $fallbackIndexed;
+    }
+
+    /**
+     * Validates Brazilian CPF (11 digits) or CNPJ (14 digits) using official Mod-11 checksums.
+     */
+    public static function isValidCpfOrCnpj(string $raw): bool
+    {
+        $digits = self::digitsOnly($raw);
+        if (strlen($digits) === 11) {
+            if (preg_match('/^(\d)\1{10}$/', $digits) === 1) {
+                return false;
+            }
+            for ($t = 9; $t < 11; $t++) {
+                $sum = 0;
+                for ($c = 0; $c < $t; $c++) {
+                    $sum += ((int) $digits[$c]) * (($t + 1) - $c);
+                }
+                $check = ((10 * $sum) % 11) % 10;
+                if (((int) $digits[$t]) !== $check) {
+                    return false;
+                }
+            }
+            return true;
+        }
+
+        if (strlen($digits) === 14) {
+            if (preg_match('/^(\d)\1{13}$/', $digits) === 1) {
+                return false;
+            }
+            $weights1 = [5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2];
+            $weights2 = [6, 5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2];
+            $sum1 = 0;
+            for ($i = 0; $i < 12; $i++) {
+                $sum1 += ((int) $digits[$i]) * $weights1[$i];
+            }
+            $rem1 = $sum1 % 11;
+            $d1 = $rem1 < 2 ? 0 : 11 - $rem1;
+            if (((int) $digits[12]) !== $d1) {
+                return false;
+            }
+            $sum2 = 0;
+            for ($i = 0; $i < 13; $i++) {
+                $sum2 += ((int) $digits[$i]) * $weights2[$i];
+            }
+            $rem2 = $sum2 % 11;
+            $d2 = $rem2 < 2 ? 0 : 11 - $rem2;
+            return ((int) $digits[13]) === $d2;
+        }
+
+        return false;
     }
 
     /**

@@ -1,7 +1,7 @@
 /**
  * WHMCS Iugu Credit Card Client-Side Tokenization Controller (`iugucc.js`)
  *
- * Uses official Iugu.js v2 (`https://js.iugu.net/v2`) to tokenize credit card details
+ * Uses official Iugu.js v2 (`https://js.iugu.com/v2`) to tokenize credit card details
  * directly in the customer's browser (PCI-DSS compliant).
  * Raw card numbers and CVVs are NEVER sent to the WHMCS server.
  */
@@ -13,6 +13,9 @@
     }
 })(typeof self !== 'undefined' ? self : this, function () {
     'use strict';
+
+    /** Max time to wait for Iugu.js createPaymentToken before releasing the form (ms). */
+    var TOKENIZATION_TIMEOUT_MS = 30000;
 
     /**
      * Strips all non-digit characters from a string.
@@ -238,8 +241,26 @@
             window.Iugu.setAccountID(config.accountId);
             window.Iugu.setTestMode(Boolean(config.sandboxMode));
 
+            // Watchdog: Iugu.js v2 tokenizes through a JSONP <script> request. If that request fails
+            // (API 5xx, network block), Iugu.js never calls back. Without this guard the customer would
+            // stay on a disabled "Processando..." button forever.
+            var tokenizationSettled = false;
+            var watchdogMs = parseInt(config.tokenizationTimeoutMs || TOKENIZATION_TIMEOUT_MS, 10) || TOKENIZATION_TIMEOUT_MS;
+            var watchdog = setTimeout(function () {
+                if (tokenizationSettled) return;
+                tokenizationSettled = true;
+                if (submitBtn) {
+                    submitBtn.disabled = false;
+                    submitBtn.textContent = originalBtnText;
+                }
+                showAlert(i18n.err_network || i18n.err_tokenization_failed || 'Erro de comunicação com o servidor.', 'error');
+            }, watchdogMs);
+
             window.Iugu.createPaymentToken(form, function (tokenResponse) {
-                if (tokenResponse.errors) {
+                if (tokenizationSettled) return; // late answer after watchdog fired: ignore (token would be unusable)
+                tokenizationSettled = true;
+                clearTimeout(watchdog);
+                if (!tokenResponse || tokenResponse.errors) {
                     if (submitBtn) {
                         submitBtn.disabled = false;
                         submitBtn.textContent = originalBtnText;
@@ -271,10 +292,20 @@
                     .then(function (result) {
                         if (result && result.success) {
                             showAlert(result.message || i18n.success_redirecting || 'Pagamento aprovado!', 'success');
-                            var targetUrl = result.redirect_url || ('viewinvoice.php?id=' + encodeURIComponent(config.invoiceId) + '&paymentsuccess=true');
+                            if (result.panel_url && alertBox) {
+                                var actionWrap = document.createElement('div');
+                                actionWrap.style.marginTop = '10px';
+                                var panelLink = document.createElement('a');
+                                panelLink.href = String(result.panel_url);
+                                panelLink.className = 'btn btn-success btn-sm';
+                                panelLink.textContent = i18n.access_panel_button || 'Acessar Painel do Serviço';
+                                actionWrap.appendChild(panelLink);
+                                alertBox.appendChild(actionWrap);
+                            }
+                            var targetUrl = result.redirect_url || config.invoiceReturnUrl || ('viewinvoice.php?id=' + encodeURIComponent(config.invoiceId) + '&paymentsuccess=true');
                             setTimeout(function () {
                                 window.location.href = targetUrl;
-                            }, 600);
+                            }, result.panel_url ? 1500 : 600);
                         } else {
                             if (submitBtn) {
                                 submitBtn.disabled = false;
@@ -304,6 +335,7 @@
         isValidHolderName: isValidHolderName,
         isValidCpfCnpj: isValidCpfCnpj,
         buildServerSubmissionPayload: buildServerSubmissionPayload,
-        initCheckoutForm: initCheckoutForm
+        initCheckoutForm: initCheckoutForm,
+        TOKENIZATION_TIMEOUT_MS: TOKENIZATION_TIMEOUT_MS
     };
 });

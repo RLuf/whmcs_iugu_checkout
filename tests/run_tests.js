@@ -157,6 +157,23 @@ async function runAllTests() {
     assert(checkoutTemplate.includes('data-iugu="expiration"'), 'Checkout template binds data-iugu="expiration"');
     assert(checkoutTemplate.includes('data-iugu="full_name"'), 'Checkout template binds data-iugu="full_name"');
 
+    // Iugu.js v2 must be loaded from the official host js.iugu.com (js.iugu.net does not resolve in DNS)
+    const configPhp = fs.readFileSync(path.join(ROOT, 'modules/gateways/iugucc/lib/Config.php'), 'utf8');
+    assert(
+        configPhp.includes("IUGU_JS_URL  = 'https://js.iugu.com/v2'") && !configPhp.includes('js.iugu.net'),
+        'Config::IUGU_JS_URL points to the official Iugu.js v2 host (https://js.iugu.com/v2), never js.iugu.net'
+    );
+    const moduleSources = [
+        'modules/gateways/iugucc.php',
+        'modules/gateways/callback/iugucc.php',
+        'modules/gateways/iugucc/assets/js/iugucc.js',
+        'modules/gateways/iugucc/templates/checkout.php'
+    ].map((rel) => fs.readFileSync(path.join(ROOT, rel), 'utf8')).join('\n');
+    assert(
+        !moduleSources.includes('js.iugu.net'),
+        'No module source references the non-existent js.iugu.net host'
+    );
+
     // Ensure inputs with data-iugu DO NOT have a name="" attribute (PCI-DSS guarantee)
     const inputTags = checkoutTemplate.match(/<input\b[^>]*>/gi) || [];
     const sensitiveInputsWithName = inputTags.filter(
@@ -487,6 +504,36 @@ async function runAllTests() {
         computeNextVersion('1.0.0', 'major') === '2.0.0',
         'Semantic version bumping utility computes patch, minor, and major transitions accurately'
     );
+
+    {
+        const hooksPhpSrc = fs.readFileSync(path.join(ROOT, 'modules/gateways/iugucc/hooks.php'), 'utf8');
+        const loaderPhpSrc = fs.readFileSync(path.join(ROOT, 'includes/hooks/iugucc_hooks_loader.php'), 'utf8');
+        const configPhpSrc = fs.readFileSync(path.join(ROOT, 'modules/gateways/iugucc/lib/Config.php'), 'utf8');
+        const gatewayPhpSrc = fs.readFileSync(path.join(ROOT, 'modules/gateways/iugucc.php'), 'utf8');
+        const httpClientPhpSrc = fs.readFileSync(path.join(ROOT, 'modules/gateways/iugucc/lib/IuguHttpClient.php'), 'utf8');
+        const chargeProcPhpSrc = fs.readFileSync(path.join(ROOT, 'modules/gateways/iugucc/lib/ChargeProcessor.php'), 'utf8');
+
+        assert(
+            hooksPhpSrc.includes('declare(strict_types=1);') && loaderPhpSrc.includes('declare(strict_types=1);'),
+            'hooks.php and includes/hooks/iugucc_hooks_loader.php exist with strict_types=1'
+        );
+        assert(
+            configPhpSrc.includes("'CPF ou CNPJ'") && gatewayPhpSrc.includes("'Default' => 'CPF ou CNPJ'"),
+            'Config.php and iugucc.php default cpfCustomField to CPF ou CNPJ'
+        );
+        assert(
+            gatewayPhpSrc.includes("['viewinvoice.php', 'cart.php']"),
+            'iugucc_isInvoicePage() renders checkout form on both viewinvoice.php and cart.php'
+        );
+        assert(
+            httpClientPhpSrc.includes('function captureInvoice(') &&
+            httpClientPhpSrc.includes('function createCustomer(') &&
+            httpClientPhpSrc.includes('function createCustomerPaymentMethod(') &&
+            chargeProcPhpSrc.includes('captureInvoice(') &&
+            chargeProcPhpSrc.includes('in_analysis'),
+            'IuguHttpClient exposes capture/customer/payment_method endpoints and ChargeProcessor auto-captures in_analysis'
+        );
+    }
 
     console.log('\n======================================================================');
     console.log(` TEST SUMMARY: ${passed} passed, ${failed} failed`);

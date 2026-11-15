@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 160" width="600" height="160" role="img" aria-label="Iugu - Cartão de Crédito">
+  <g transform="translate(14,22)">
+    <rect width="176" height="116" rx="14" fill="#0b7a53"/>
+    <rect y="24" width="176" height="24" fill="#064e36"/>
+    <rect x="18" y="66" width="44" height="30" rx="5" fill="#f5d27a"/>
+    <rect x="76" y="72" width="82" height="7" rx="3.5" fill="#d1fae5"/>
+    <rect x="76" y="86" width="56" height="7" rx="3.5" fill="#a7f3d0"/>
+  </g>
+  <text x="214" y="78" font-family="Arial, Helvetica, sans-serif" font-size="56" font-weight="700" fill="#0f172a">iugu</text>
+  <text x="216" y="120" font-family="Arial, Helvetica, sans-serif" font-size="27" font-weight="400" fill="#334155">Cartão de Crédito</text>
+</svg>

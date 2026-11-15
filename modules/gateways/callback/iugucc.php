@@ -24,6 +24,7 @@ require_once __DIR__ . '/../../../init.php';
 require_once __DIR__ . '/../../../includes/gatewayfunctions.php';
 require_once __DIR__ . '/../../../includes/invoicefunctions.php';
 require_once __DIR__ . '/../iugucc/autoload.php';
+require_once __DIR__ . '/../iugucc/hooks.php';
 
 use WHMCS\Database\Capsule;
 use WHMCS\Module\Gateway\IuguCC\ChargeProcessor;
@@ -42,6 +43,27 @@ if (empty($gatewayParams['type'])) {
 }
 
 $config = new Config($gatewayParams);
+
+if (!$config->isConfigured()) {
+    // Missing Account ID / API token, or Sandbox Mode without the Iugu TEST token. 503 makes Iugu retry
+    // webhooks later and gives the checkout UI a clear, non-card-related message.
+    logTransaction(
+        $gatewayModuleName,
+        ['sandbox_mode' => $config->isSandbox(), 'sandbox_token_missing' => $config->isSandboxTokenMissing()],
+        'Gateway Not Configured'
+    );
+    http_response_code(503);
+    header('Content-Type: application/json; charset=utf-8');
+    echo json_encode([
+        'success' => false,
+        'lr_code' => 'NOT_CONFIGURED',
+        'message' => $config->isSandboxTokenMissing()
+            ? 'Modo Sandbox ativo sem Token de API de Teste da Iugu. Configure o token de teste no gateway.'
+            : 'Credenciais da Iugu pendentes de configuração no WHMCS.',
+    ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    exit;
+}
+
 $httpClient = new IuguHttpClient($config->getActiveApiToken());
 
 // Parse incoming request (supports application/json and application/x-www-form-urlencoded)
@@ -122,12 +144,53 @@ if ($action === 'checkout' || isset($requestData['iugu_token'])) {
         exit;
     }
 
+    // Only invoices that are still open may be charged. A checkout signature captured while the invoice
+    // was Unpaid must not be usable after it is Cancelled, Refunded, sent to Collections, back to Draft or
+    // Payment Pending: the card would be debited and WHMCS would not settle the invoice.
+    // (Paid invoices fall through to ChargeProcessor, which answers "already paid" without charging.)
+    $invoiceStatus = strtolower(trim((string) ($invoiceRow->status ?? '')));
+    if ($invoiceStatus !== 'unpaid' && $invoiceStatus !== 'paid') {
+        logTransaction(
+            $gatewayModuleName,
+            ['whmcs_invoice_id' => $invoiceId, 'invoice_status' => (string) ($invoiceRow->status ?? '')],
+            'Checkout Blocked (Invoice Not Payable)'
+        );
+        http_response_code(409);
+        echo json_encode([
+            'success' => false,
+            'invoice_id' => (string) $invoiceId,
+            'transaction_id' => '',
+            'lr_code' => 'INVOICE_NOT_PAYABLE',
+            'message' => $config->isEnglish()
+                ? 'This invoice is not open for payment. Please reload the invoice page.'
+                : 'Esta fatura não está em aberto para pagamento. Recarregue a página da fatura.',
+            'redirect_url' => null,
+        ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        exit;
+    }
+
     $clientId = (int) ($invoiceRow->userid ?? 0);
     $invoiceTotal = (string) ($invoiceRow->total ?? '0.00');
     $providedSignature = trim((string) ($requestData['signature'] ?? ''));
 
-    // Verify HMAC-SHA256 checkout signature
-    if (!$config->verifyCheckoutSignature($invoiceId, $clientId, $invoiceTotal, $providedSignature)) {
+    // Compute remaining balance in case the invoice has partial credit or prior partial payments
+    $paidSum = 0.0;
+    if (class_exists(Capsule::class)) {
+        $paidIn = (float) Capsule::table('tblaccounts')->where('invoiceid', $invoiceId)->sum('amountin');
+        $paidOut = (float) Capsule::table('tblaccounts')->where('invoiceid', $invoiceId)->sum('amountout');
+        $paidSum = max(0.0, $paidIn - $paidOut);
+    }
+    $calculatedBalance = number_format(max(0.0, ((float) $invoiceTotal) - $paidSum), 2, '.', '');
+
+    // Verify HMAC-SHA256 checkout signature against authoritative balance or total
+    $verifiedAmount = null;
+    if ($config->verifyCheckoutSignature($invoiceId, $clientId, $calculatedBalance, $providedSignature)) {
+        $verifiedAmount = (float) $calculatedBalance;
+    } elseif ($config->verifyCheckoutSignature($invoiceId, $clientId, $invoiceTotal, $providedSignature)) {
+        $verifiedAmount = (float) $invoiceTotal;
+    }
+
+    if ($verifiedAmount === null) {
         http_response_code(403);
         echo json_encode([
             'success' => false,
@@ -136,21 +199,144 @@ if ($action === 'checkout' || isset($requestData['iugu_token'])) {
         exit;
     }
 
-    // Load client record
+    // Load client record and enrich with WHMCS client custom fields (e.g., "CPF ou CNPJ")
     $clientRow = class_exists(Capsule::class)
         ? (array) Capsule::table('tblclients')->where('id', $clientId)->first()
         : [];
+    $clientRow = iugucc_enrichClientRowWithCustomFields($clientRow, $clientId);
+
+    // Authenticated Sentinel E2E simulation transport (requires sentinelMode, webhookSecret,
+    // valid invoice checkout signature AND HMAC-SHA256 X-IuguCC-Sentinel-Signature header)
+    $sentinelSig = trim((string) ($_SERVER['HTTP_X_IUGUCC_SENTINEL_SIGNATURE'] ?? ''));
+    $isSentinelSim = false;
+    if (
+        $sentinelSig !== ''
+        && $config->isSentinelModeEnabled()
+        && $config->getWebhookSecret() !== ''
+    ) {
+        $expectedSentinelSig = hash_hmac(
+            'sha256',
+            sprintf('sentinel_sim|%d|%.2f', $invoiceId, $verifiedAmount),
+            $config->getActiveApiToken() . '|' . $config->getWebhookSecret()
+        );
+        if (hash_equals($expectedSentinelSig, $sentinelSig)) {
+            $isSentinelSim = true;
+            $sentinelCents = (int) round($verifiedAmount * 100);
+            $sentinelInvId = 'SENTINEL_TXN_' . $invoiceId . '_' . time();
+            $sentinelFeeCents = (int) round($sentinelCents * 0.0299);
+            $sentinelTransport = static function (string $method, string $url) use (
+                $clientId,
+                $sentinelInvId,
+                $sentinelCents,
+                $sentinelFeeCents
+            ): array {
+                $path = (string) parse_url($url, PHP_URL_PATH);
+                if ($method === 'POST' && str_ends_with($path, '/customers')) {
+                    return [
+                        'status' => 200,
+                        'body' => json_encode(['id' => 'SENTINEL_CUST_' . $clientId]),
+                    ];
+                }
+                if ($method === 'POST' && preg_match('#/customers/[^/]+/payment_methods$#', $path) === 1) {
+                    return [
+                        'status' => 200,
+                        'body' => json_encode([
+                            'id' => 'SENTINEL_PM_' . $clientId,
+                            'data' => ['brand' => 'Visa', 'last_digits' => '1111'],
+                        ]),
+                    ];
+                }
+                if ($method === 'POST' && str_ends_with($path, '/charge')) {
+                    return [
+                        'status' => 200,
+                        'body' => json_encode([
+                            'success' => true,
+                            'status' => 'paid',
+                            'LR' => '00',
+                            'message' => 'Autorizado (Simulacao Sentinela)',
+                            'invoice_id' => $sentinelInvId,
+                        ]),
+                    ];
+                }
+                if ($method === 'POST' && preg_match('#/invoices/[^/]+/capture$#', $path) === 1) {
+                    return [
+                        'status' => 200,
+                        'body' => json_encode(['id' => $sentinelInvId, 'status' => 'paid']),
+                    ];
+                }
+                return [
+                    'status' => 200,
+                    'body' => json_encode([
+                        'id' => $sentinelInvId,
+                        'status' => 'paid',
+                        'total_cents' => $sentinelCents,
+                        'total_paid_cents' => $sentinelCents,
+                        'taxes_paid_cents' => $sentinelFeeCents,
+                    ]),
+                ];
+            };
+            $httpClient = new IuguHttpClient(
+                $config->getActiveApiToken(),
+                Config::API_BASE_URL,
+                30,
+                $sentinelTransport
+            );
+        }
+    }
+
+    // Exchange single-use Iugu.js token for a reusable Iugu customer payment method (auto-renewal)
+    $vaultedCard = [];
+    if (empty($requestData['customer_payment_method_id']) && !empty($requestData['iugu_token'])) {
+        $vaultedCard = iugucc_prepareVaultedPaymentMethod(
+            $config,
+            $httpClient,
+            $clientId,
+            $clientRow,
+            (string) $requestData['iugu_token']
+        );
+        if (!empty($vaultedCard['customer_payment_method_id'])) {
+            $requestData['customer_payment_method_id'] = $vaultedCard['customer_payment_method_id'];
+            $requestData['customer_id'] = $vaultedCard['customer_id'] ?? '';
+        }
+    }
+
+    $systemUrl = rtrim((string) ($gatewayParams['systemurl'] ?? ''), '/');
+    $whmcsCallbacks['onPaymentSuccess'] = static function (int $paidInvoiceId) use (
+        $config,
+        $clientId,
+        $vaultedCard,
+        $isSentinelSim,
+        $systemUrl
+    ): array {
+        if (!$isSentinelSim && !empty($vaultedCard['customer_payment_method_id']) && !empty($vaultedCard['customer_id'])) {
+            iugucc_saveVaultedCard(
+                $clientId,
+                $config->isSandbox(),
+                $vaultedCard['customer_id'],
+                $vaultedCard['customer_payment_method_id'],
+                $vaultedCard['brand'] ?? '',
+                $vaultedCard['last4'] ?? ''
+            );
+        }
+
+        $panel = iugucc_resolveInvoiceServicePanel($paidInvoiceId, $systemUrl);
+        return [
+            'panel_url' => $panel['panel_url'] ?? null,
+            'site_url' => $panel['site_url'] ?? null,
+            'wp_admin_url' => $panel['wp_admin_url'] ?? null,
+            'service_id' => $panel['service_id'] ?? null,
+        ];
+    };
 
     $processor = new ChargeProcessor($config, $httpClient);
     $result = $processor->processCharge(
         $requestData,
         $invoiceId,
-        (float) $invoiceTotal,
+        $verifiedAmount,
         $clientRow,
         $whmcsCallbacks
     );
 
-    $systemUrl = rtrim((string) ($gatewayParams['systemurl'] ?? ''), '/');
     $redirectUrl = $systemUrl . '/viewinvoice.php?id=' . $invoiceId . '&paymentsuccess=true';
 
     http_response_code($result['success'] ? 200 : 422);
@@ -160,6 +346,10 @@ if ($action === 'checkout' || isset($requestData['iugu_token'])) {
         'transaction_id' => $result['transaction_id'],
         'lr_code' => $result['lr_code'],
         'message' => $result['message'],
+        'panel_url' => $result['panel_url'] ?? null,
+        'site_url' => $result['site_url'] ?? null,
+        'wp_admin_url' => $result['wp_admin_url'] ?? null,
+        'service_id' => $result['service_id'] ?? null,
         'redirect_url' => $result['success'] ? $redirectUrl : null,
     ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     exit;
