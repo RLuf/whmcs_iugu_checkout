@@ -292,10 +292,20 @@
                     .then(function (result) {
                         if (result && result.success) {
                             showAlert(result.message || i18n.success_redirecting || 'Pagamento aprovado!', 'success');
-                            var targetUrl = result.redirect_url || ('viewinvoice.php?id=' + encodeURIComponent(config.invoiceId) + '&paymentsuccess=true');
+                            if (result.panel_url && alertBox) {
+                                var actionWrap = document.createElement('div');
+                                actionWrap.style.marginTop = '10px';
+                                var panelLink = document.createElement('a');
+                                panelLink.href = String(result.panel_url);
+                                panelLink.className = 'btn btn-success btn-sm';
+                                panelLink.textContent = i18n.access_panel_button || 'Acessar Painel do Serviço';
+                                actionWrap.appendChild(panelLink);
+                                alertBox.appendChild(actionWrap);
+                            }
+                            var targetUrl = result.redirect_url || config.invoiceReturnUrl || ('viewinvoice.php?id=' + encodeURIComponent(config.invoiceId) + '&paymentsuccess=true');
                             setTimeout(function () {
                                 window.location.href = targetUrl;
-                            }, 600);
+                            }, result.panel_url ? 1500 : 600);
                         } else {
                             if (submitBtn) {
                                 submitBtn.disabled = false;

@@ -90,6 +90,49 @@ final class IuguHttpClient
     }
 
     /**
+     * Captures an authorized/in-analysis Iugu invoice (`POST /v1/invoices/{id}/capture`).
+     *
+     * @return array{http_code: int, body: array<string, mixed>, raw: string}
+     */
+    public function captureInvoice(string $iuguInvoiceId): array
+    {
+        $cleanId = preg_replace('/[^a-zA-Z0-9_-]/', '', $iuguInvoiceId) ?? '';
+        if ($cleanId === '') {
+            throw new RuntimeException('Invalid Iugu invoice ID for capture.');
+        }
+
+        return $this->request('POST', '/invoices/' . $cleanId . '/capture', []);
+    }
+
+    /**
+     * Creates a customer record in Iugu (`POST /v1/customers`) for recurring card vaulting.
+     *
+     * @param array<string, mixed> $customerData
+     * @return array{http_code: int, body: array<string, mixed>, raw: string}
+     */
+    public function createCustomer(array $customerData): array
+    {
+        return $this->request('POST', '/customers', $customerData);
+    }
+
+    /**
+     * Saves a tokenized credit card as a reusable customer payment method (`POST /v1/customers/{id}/payment_methods`).
+     *
+     * @param string               $customerId
+     * @param array<string, mixed> $paymentMethodData
+     * @return array{http_code: int, body: array<string, mixed>, raw: string}
+     */
+    public function createCustomerPaymentMethod(string $customerId, array $paymentMethodData): array
+    {
+        $cleanId = preg_replace('/[^a-zA-Z0-9_-]/', '', $customerId) ?? '';
+        if ($cleanId === '') {
+            throw new RuntimeException('Invalid Iugu customer ID for payment method.');
+        }
+
+        return $this->request('POST', '/customers/' . $cleanId . '/payment_methods', $paymentMethodData);
+    }
+
+    /**
      * Performs an HTTP request to the Iugu REST API v1.
      *
      * @param string                    $method  GET, POST, PUT, DELETE
@@ -110,7 +153,7 @@ final class IuguHttpClient
             'Authorization: ' . $authHeader,
             'Accept: application/json',
             'Content-Type: application/json; charset=utf-8',
-            'User-Agent: WHMCS-IuguCC-Gateway/1.1.0 (WHMCS 8.13.7; PHP ' . PHP_VERSION . ')',
+            'User-Agent: WHMCS-IuguCC-Gateway/1.2.0 (WHMCS 8.13.7; PHP ' . PHP_VERSION . ')',
         ];
 
         $jsonBody = null;

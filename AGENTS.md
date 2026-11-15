@@ -21,7 +21,7 @@ Copy-Item "modules/gateways/iugucc.php" "archived/${ts}_iugucc.php"
 ## 2. Política Estrita de Não-Interferência
 1. **Módulo de Boleto Bancário Existente (Edvan):**
    - **PROIBIDO** alterar, sobrescrever ou interferir no módulo de boleto bancário da Iugu já existente (desenvolvido por Edvan).
-   - Este módulo de Cartão de Crédito utiliza o identificador exclusivo `iugucc` (`modules/gateways/iugucc.php`, `modules/gateways/callback/iugucc.php` e `modules/gateways/iugucc/`) para garantir isolamento total.
+   - Este módulo de Cartão de Crédito utiliza o identificador exclusivo `iugucc` (`modules/gateways/iugucc.php`, `modules/gateways/callback/iugucc.php`, `modules/gateways/iugucc/` e `includes/hooks/iugucc_hooks_loader.php`) para garantir isolamento total.
 2. **Servidores de Produção Remotos:**
    - **PROIBIDO** executar alterações diretas ou scripts destrutivos nos servidores `bells.webstorage.com.br` e `red.webstorage.com.br`.
 3. **Credenciais Privadas:**
@@ -67,7 +67,7 @@ E2E_EMAIL=<caixa_de_teste> E2E_PREFIX=<prefixo> node tests/e2e/live_flow.js full
 ```
 O estado da conta de teste fica em `archived/e2e/` (nunca versionado). A instalação no servidor é feita por `scripts/install-on-whmcs.sh` (copia só os arquivos do `iugucc`, com backup); o pacote para cPanel sai de `scripts/build-release.sh`.
 
-Regras de negócio fixadas por teste: o callback só cobra faturas com status `Unpaid` (qualquer outro status responde `409 INVOICE_NOT_PAYABLE`); o Modo Sandbox usa somente o token de Teste (sem recorrer ao token LIVE); fora de `viewinvoice.php` (e-mail de fatura, conclusão do pedido) `iugucc_link()` devolve apenas o botão que leva à fatura.
+Regras de negócio fixadas por teste: o callback só cobra faturas com status `Unpaid` (qualquer outro status responde `409 INVOICE_NOT_PAYABLE`); o Modo Sandbox usa somente o token de Teste (sem recorrer ao token LIVE); `iugucc_link()` renderiza o checkout transparente em `viewinvoice.php` e `cart.php` (checkout inline na contratação), e fora dessas páginas (ex.: e-mail de fatura) devolve apenas o botão que leva à fatura; o loader `includes/hooks/iugucc_hooks_loader.php` carrega `modules/gateways/iugucc/hooks.php` isoladamente para o cofre de renovação automática 1x.
 O relatório de conformidade (WHMCS × Iugu) e a lista de limitações do tipo *Third-Party* estão em `docs/AUDITORIA_WHMCS_IUGU.md`.
 
 ---

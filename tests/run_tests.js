@@ -505,6 +505,36 @@ async function runAllTests() {
         'Semantic version bumping utility computes patch, minor, and major transitions accurately'
     );
 
+    {
+        const hooksPhpSrc = fs.readFileSync(path.join(ROOT, 'modules/gateways/iugucc/hooks.php'), 'utf8');
+        const loaderPhpSrc = fs.readFileSync(path.join(ROOT, 'includes/hooks/iugucc_hooks_loader.php'), 'utf8');
+        const configPhpSrc = fs.readFileSync(path.join(ROOT, 'modules/gateways/iugucc/lib/Config.php'), 'utf8');
+        const gatewayPhpSrc = fs.readFileSync(path.join(ROOT, 'modules/gateways/iugucc.php'), 'utf8');
+        const httpClientPhpSrc = fs.readFileSync(path.join(ROOT, 'modules/gateways/iugucc/lib/IuguHttpClient.php'), 'utf8');
+        const chargeProcPhpSrc = fs.readFileSync(path.join(ROOT, 'modules/gateways/iugucc/lib/ChargeProcessor.php'), 'utf8');
+
+        assert(
+            hooksPhpSrc.includes('declare(strict_types=1);') && loaderPhpSrc.includes('declare(strict_types=1);'),
+            'hooks.php and includes/hooks/iugucc_hooks_loader.php exist with strict_types=1'
+        );
+        assert(
+            configPhpSrc.includes("'CPF ou CNPJ'") && gatewayPhpSrc.includes("'Default' => 'CPF ou CNPJ'"),
+            'Config.php and iugucc.php default cpfCustomField to CPF ou CNPJ'
+        );
+        assert(
+            gatewayPhpSrc.includes("['viewinvoice.php', 'cart.php']"),
+            'iugucc_isInvoicePage() renders checkout form on both viewinvoice.php and cart.php'
+        );
+        assert(
+            httpClientPhpSrc.includes('function captureInvoice(') &&
+            httpClientPhpSrc.includes('function createCustomer(') &&
+            httpClientPhpSrc.includes('function createCustomerPaymentMethod(') &&
+            chargeProcPhpSrc.includes('captureInvoice(') &&
+            chargeProcPhpSrc.includes('in_analysis'),
+            'IuguHttpClient exposes capture/customer/payment_method endpoints and ChargeProcessor auto-captures in_analysis'
+        );
+    }
+
     console.log('\n======================================================================');
     console.log(` TEST SUMMARY: ${passed} passed, ${failed} failed`);
     console.log('======================================================================\n');

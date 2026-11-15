@@ -34,4 +34,5 @@ return [
     'err_sandbox_token_missing' => 'Sandbox Mode is enabled without an Iugu TEST API token. Enter the Test token in the gateway settings (the production token does not accept test cards).',
     'err_not_configured' => 'This payment gateway is currently unavailable (Iugu credentials pending configuration in WHMCS).',
     'success_redirecting' => 'Payment approved! Updating your invoice and activating your services...',
+    'access_panel_button' => 'Access Service Panel',
 ];

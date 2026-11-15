@@ -15,7 +15,7 @@
  * @author     RLuf / ImovelSite <https://imovelsite.com.br>
  * @copyright  2026 ImovelSite
  * @license    MIT
- * @version    1.1.0
+ * @version    1.2.0
  */
 
 declare(strict_types=1);
@@ -25,7 +25,7 @@ if (!defined('WHMCS')) {
 }
 
 if (!defined('IUGUCC_MODULE_VERSION')) {
-    define('IUGUCC_MODULE_VERSION', '1.1.0');
+    define('IUGUCC_MODULE_VERSION', '1.2.0');
 }
 
 require_once __DIR__ . '/iugucc/autoload.php';
@@ -133,7 +133,7 @@ function iugucc_config(): array
             'FriendlyName' => 'Nome do Campo Personalizado de CPF/CNPJ',
             'Type' => 'text',
             'Size' => '30',
-            'Default' => 'CPF/CNPJ',
+            'Default' => 'CPF ou CNPJ',
             'Description' => 'Nome do Custom Field do cliente no WHMCS caso não use o campo nativo Tax ID.',
         ],
         'webhookSecret' => [
@@ -213,19 +213,22 @@ function iugucc_link(array $params): string
     $isSandbox = $config->isSandbox();
     $iuguJsUrl = Config::IUGU_JS_URL;
 
+    $invoiceReturnUrl = $systemUrl . '/viewinvoice.php?id=' . $invoiceId . '&paymentsuccess=true';
+    $isCartCheckoutPage = basename((string) ($_SERVER['SCRIPT_NAME'] ?? $_SERVER['PHP_SELF'] ?? '')) === 'cart.php';
+
     ob_start();
     require __DIR__ . '/iugucc/templates/checkout.php';
     return (string) ob_get_clean();
 }
 
 /**
- * True when the current request is the client-area invoice page (viewinvoice.php), the only place
- * where the transparent card form may be rendered.
+ * True when the current request is a client-area interactive checkout page (`viewinvoice.php` or
+ * `cart.php` order completion / forward page), where the transparent card form is rendered.
  */
 function iugucc_isInvoicePage(): bool
 {
     $script = (string) ($_SERVER['SCRIPT_NAME'] ?? $_SERVER['PHP_SELF'] ?? '');
-    return basename($script) === 'viewinvoice.php';
+    return in_array(basename($script), ['viewinvoice.php', 'cart.php'], true);
 }
 
 /**

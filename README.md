@@ -1,6 +1,6 @@
 # WHMCS Iugu Credit Card Checkout Gateway (`iugucc`)
 
-[![Version](https://img.shields.io/badge/version-1.1.0-blue.svg)](./VERSION)
+[![Version](https://img.shields.io/badge/version-1.2.0-blue.svg)](./VERSION)
 [![WHMCS](https://img.shields.io/badge/WHMCS-8.13.7-success.svg)](https://www.whmcs.com/)
 [![PHP](https://img.shields.io/badge/PHP-8.1%20%7C%208.2-777bb4.svg)](https://www.php.net/)
 [![PCI-DSS](https://img.shields.io/badge/PCI--DSS-Client--Side%20Tokenized-brightgreen.svg)](https://dev.iugu.com/)
@@ -20,6 +20,8 @@ Módulo comercial de gateway de pagamento via **Cartão de Crédito (Checkout Tr
   - **Webhook Idempotente:** O endpoint `modules/gateways/callback/iugucc.php` recebe notificações `invoice.status_changed` da Iugu, confirma a autenticidade diretamente na API (`GET /v1/invoices/{id}`) e garante que nenhuma fatura receba baixa duplicada.
 - **Zero Interferência com o Módulo de Boleto Existente:** Utiliza o identificador exclusivo `iugucc`, convivendo em total harmonia com o módulo de boleto bancário da Iugu já instalado (por Edvan).
 - **Suporte a Parcelamento e Estornos:** Configurável de `1x` a `12x` com valor mínimo de parcela e suporte nativo a reembolso total ou parcial (`iugucc_refund`) direto pelo painel Admin do WHMCS.
+- **Checkout Inline no Carrinho & Acesso Imediato ao Painel (`v1.2.0`):** Renderiza o checkout transparente diretamente em `cart.php` (sem sair da tela de contratação) e em `viewinvoice.php`, com captura automática para status `in_analysis` e redirecionamento imediato para o painel do serviço após aprovação.
+- **Renovação Automática 1x (`v1.2.0`):** Cofre de cartões (`mod_iugucc_cards`) via cliente/método de pagamento na Iugu (`hooks.php` carregado por `includes/hooks/iugucc_hooks_loader.php`) para cobrança recorrente automática de planos elegíveis.
 
 ---
 
@@ -76,13 +78,16 @@ flowchart LR
 .
 ├── AGENTS.md                           # Regras obrigatórias de segurança e backup em archived/
 ├── CHANGELOG.md                        # Histórico de versões (SemVer)
-├── VERSION                             # Versão atual do módulo (1.1.0)
+├── VERSION                             # Versão atual do módulo (1.2.0)
 ├── composer.json                       # Metadados do pacote e scripts
 ├── archived/                           # Diretório local de backups (ignorado no .gitignore)
 ├── docs/
 │   ├── ARCHITECTURE.md                 # Diagramas de sequência e arquitetura PCI-DSS
 │   ├── INSTALLATION_WHMCS.md           # Passo a passo de instalação no WHMCS 8.13.7 e Iugu
 │   └── SANDBOX_TESTING.md              # Guia de testes Sandbox e códigos LR
+├── includes/
+│   └── hooks/
+│       └── iugucc_hooks_loader.php     # Loader WHMCS dos hooks de cofre e renovação 1x
 ├── modules/
 │   └── gateways/
 │       ├── iugucc.php                  # Entry point principal do módulo WHMCS
@@ -90,6 +95,7 @@ flowchart LR
 │       │   └── iugucc.php              # Handler síncrono de checkout + Webhook assíncrono
 │       └── iugucc/
 │           ├── autoload.php            # Autoloader PSR-4 standalone (sem necessidade de SSH/Composer)
+│           ├── hooks.php               # Cofre de cartões (mod_iugucc_cards) e renovação automática
 │           ├── assets/                 # CSS e JS (integração Iugu.js v2)
 │           ├── lang/                   # Traduções PT-BR e EN
 │           ├── lib/                    # Cliente HTTP Iugu, sanitizador PCI e processadores
@@ -162,6 +168,8 @@ Commercial-grade, configurable **Credit Card Transparent Checkout** payment gate
   - Marks WHMCS invoices as `Paid` immediately upon checkout approval (`addInvoicePayment`), recording the exact Iugu gateway fee (`taxes_paid_cents`) and automatically triggering WHMCS service provisioning.
   - Includes an asynchronous webhook callback (`modules/gateways/callback/iugucc.php`) that verifies invoice status server-to-server (`GET /v1/invoices/{id}`) and updates unpaid invoices idempotently.
 - **Non-Interference by Design:** Uses the dedicated `iugucc` module identifier so it never conflicts with existing Iugu Boleto modules.
+- **Inline Cart Checkout & Instant Service Panel Access (`v1.2.0`):** Renders transparent tokenized checkout directly on `cart.php` and `viewinvoice.php`, automatically captures `in_analysis` transactions, and surfaces an instant **Access Service Panel** link/redirect upon approval.
+- **1x Auto-Renewal Card Vault (`v1.2.0`):** Securely vaults customer payment methods in Iugu (`mod_iugucc_cards`, via `hooks.php` and `includes/hooks/iugucc_hooks_loader.php`) to auto-charge recurring invoices.
 
 ### Running Automated Tests & Version Bumping
 ```bash

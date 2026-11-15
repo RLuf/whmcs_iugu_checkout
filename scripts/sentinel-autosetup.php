@@ -54,7 +54,7 @@ $sampleDiagnostic = SentinelAuditor::buildSupportDiagnostic('51', 'preflight_sel
 ]);
 
 $report = [
-    'sentinel_version' => '1.1.0',
+    'sentinel_version' => defined('IUGUCC_MODULE_VERSION') ? IUGUCC_MODULE_VERSION : '1.2.0',
     'step_1_no_hot_snapshot' => $snapshot,
     'step_2_installation_watchdog' => $watchdog,
     'step_3_4_diagnostic_parser_self_test' => $sampleDiagnostic,

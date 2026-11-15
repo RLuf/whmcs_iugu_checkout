@@ -110,6 +110,7 @@ final class SentinelAuditor
         'modules/gateways/iugucc/lib/PciSanitizer.php',
         'modules/gateways/iugucc/lib/SentinelAuditor.php',
         'modules/gateways/iugucc/templates/checkout.php',
+        'modules/gateways/iugucc/hooks.php',
         'modules/gateways/iugucc/assets/js/iugucc.js',
         'modules/gateways/iugucc/assets/css/iugucc.css',
         'modules/gateways/iugucc/lang/portuguese-br.php',
@@ -154,7 +155,7 @@ final class SentinelAuditor
         $snapshotPayload = [
             'schema' => 'iugucc.sentinel.snapshot.v1',
             'created_at_utc' => gmdate('c'),
-            'module_version' => defined('IUGUCC_MODULE_VERSION') ? IUGUCC_MODULE_VERSION : '1.1.0',
+            'module_version' => defined('IUGUCC_MODULE_VERSION') ? IUGUCC_MODULE_VERSION : '1.2.0',
             'php_version' => PHP_VERSION,
             'non_interference_check' => [
                 'edvan_boleto_untouched' => true,

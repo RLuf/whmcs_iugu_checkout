@@ -49,7 +49,8 @@ final class Config
         $this->invoiceDescription = trim((string) ($params['invoiceDescription'] ?? 'Fatura #{invoice_id} - imovelsite.com.br'));
         $this->statementDescriptor = substr(trim((string) ($params['statementDescriptor'] ?? 'IMOVELSITE')), 0, 12); // Iugu soft_descriptor_light: max 12 chars
         $this->webhookSecret = trim((string) ($params['webhookSecret'] ?? ''));
-        $this->cpfCustomFieldName = trim((string) ($params['cpfCustomField'] ?? 'CPF/CNPJ'));
+        $cpfField = trim((string) ($params['cpfCustomField'] ?? ''));
+        $this->cpfCustomFieldName = $cpfField !== '' ? $cpfField : 'CPF ou CNPJ';
         $this->debugLogging = $this->parseBool($params['debugLogging'] ?? true);
         $this->sentinelMode = $this->parseBool($params['sentinelMode'] ?? true);
         $this->language = strtolower(trim((string) ($params['language'] ?? $params['clientdetails']['language'] ?? 'portuguese-br')));

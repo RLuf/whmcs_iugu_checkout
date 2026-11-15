@@ -36,11 +36,18 @@ final class PayloadBuilder
         float|string $amount,
         array $client,
         int $installments = 1,
-        string $companyName = 'imovelsite.com.br'
+        string $companyName = 'imovelsite.com.br',
+        string $customerPaymentMethodId = '',
+        string $customerId = ''
     ): array {
         $cleanToken = trim($iuguToken);
-        if ($cleanToken === '') {
-            throw new InvalidArgumentException('Iugu payment token (iugu_token) is required.');
+        $cleanPmId = trim($customerPaymentMethodId);
+        if ($cleanPmId === '' && str_starts_with($cleanToken, 'pm:')) {
+            $cleanPmId = trim(substr($cleanToken, 3));
+            $cleanToken = '';
+        }
+        if ($cleanToken === '' && $cleanPmId === '') {
+            throw new InvalidArgumentException('Iugu payment token (iugu_token) or saved payment method is required.');
         }
 
         $floatAmount = round((float) $amount, 2);
@@ -103,8 +110,9 @@ final class PayloadBuilder
             ];
         }
 
-        $payload = [
-            'token' => $cleanToken,
+        $payload = ($cleanPmId !== ''
+            ? ['customer_payment_method_id' => $cleanPmId]
+            : ['token' => $cleanToken]) + [
             'email' => $email,
             'months' => $validInstallments,
             'keep_dunning' => false,
@@ -133,6 +141,11 @@ final class PayloadBuilder
             ],
         ];
 
+        $cleanCustomerId = trim($customerId);
+        if ($cleanCustomerId !== '') {
+            $payload['customer_id'] = $cleanCustomerId;
+        }
+
         if ($config->getStatementDescriptor() !== '') {
             $payload['soft_descriptor_light'] = $config->getStatementDescriptor();
         }
@@ -145,7 +158,7 @@ final class PayloadBuilder
      *
      * @param array<string, mixed> $client
      */
-    public static function extractCpfCnpj(array $client, string $preferredFieldName = 'CPF/CNPJ'): string
+    public static function extractCpfCnpj(array $client, string $preferredFieldName = 'CPF ou CNPJ'): string
     {
         // 1. Direct override or tax_id field
         $candidates = [
@@ -167,16 +180,18 @@ final class PayloadBuilder
             $normalizedPref = strtolower(trim($preferredFieldName));
             $fallbackCandidate = '';
 
-            foreach ($client['customfields'] as $customField) {
-                if (!is_array($customField)) {
-                    continue;
+            foreach ($client['customfields'] as $key => $customField) {
+                if (is_array($customField)) {
+                    $fieldName = strtolower(trim((string) ($customField['name'] ?? $customField['fieldname'] ?? $customField['title'] ?? $key)));
+                    $val = self::digitsOnly((string) ($customField['value'] ?? ''));
+                } else {
+                    $fieldName = strtolower(trim((string) $key));
+                    $val = self::digitsOnly((string) $customField);
                 }
-                $fieldName = strtolower(trim((string) ($customField['name'] ?? $customField['fieldname'] ?? $customField['title'] ?? '')));
-                $val = self::digitsOnly((string) ($customField['value'] ?? ''));
                 if (strlen($val) !== 11 && strlen($val) !== 14) {
                     continue;
                 }
-                if ($normalizedPref !== '' && ($fieldName === $normalizedPref || str_contains($fieldName, 'cpf') || str_contains($fieldName, 'cnpj'))) {
+                if (($normalizedPref !== '' && $fieldName === $normalizedPref) || str_contains($fieldName, 'cpf') || str_contains($fieldName, 'cnpj')) {
                     return $val;
                 }
                 if (self::isValidCpfOrCnpj($val)) {

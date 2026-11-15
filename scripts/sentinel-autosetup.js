@@ -33,6 +33,7 @@ const MODULE_FILES = [
     'modules/gateways/iugucc/lib/PciSanitizer.php',
     'modules/gateways/iugucc/lib/SentinelAuditor.php',
     'modules/gateways/iugucc/templates/checkout.php',
+    'modules/gateways/iugucc/hooks.php',
     'modules/gateways/iugucc/assets/js/iugucc.js',
     'modules/gateways/iugucc/assets/css/iugucc.css',
     'modules/gateways/iugucc/lang/portuguese-br.php',
@@ -64,7 +65,7 @@ function createNoHotSnapshot() {
 
     const version = fs.existsSync(path.join(ROOT, 'VERSION'))
         ? fs.readFileSync(path.join(ROOT, 'VERSION'), 'utf8').trim()
-        : '1.1.0';
+        : '1.2.0';
 
     const payload = {
         schema: 'iugucc.sentinel.snapshot.v1',

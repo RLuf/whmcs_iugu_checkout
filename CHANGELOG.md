@@ -5,6 +5,22 @@ O formato é baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.
 
 ---
 
+## [1.2.0-rc.1] - 2026-11-15 (Pre-Release)
+
+### Added (Adicionado)
+- **Checkout transparente inline no carrinho (`cart.php` + `viewinvoice.php`)**: `iugucc_isInvoicePage()` passa a renderizar o formulário tokenizado diretamente em `viewinvoice.php` e `cart.php`, neutralizando o auto-redirect de `forwardpage.tpl` (`window.autoSubmitFormByContainer`) para conclusão do pagamento sem sair da tela de contratação (fora dessas páginas, como em e-mails de fatura, segue devolvendo apenas o botão para a fatura).
+- **Cofre de cartões e renovação automática 1x (`hooks.php` + `includes/hooks/iugucc_hooks_loader.php`)**: criação das tabelas `mod_iugucc_cards` e `mod_iugucc_autorenew_log` para tokenização em cliente Iugu (`POST /v1/customers` + `POST /v1/customers/{id}/payment_methods`) e cobrança recorrente automática à vista (`InvoiceCreationPreEmail` / `DailyCronJob`), preservando o primeiro pagamento manual de pedidos iniciais (`tblorders`).
+- **Liberação imediata pós-pagamento (`callback/iugucc.php` + `iugucc.js`)**: no retorno síncrono aprovado, o endpoint inclui `panel_url`, `site_url`, `wp_admin_url` e `service_id`, exibindo o botão imediato **"Acessar Painel do Serviço"** com redirecionamento automático e banner de confirmação via hook na área do cliente.
+- **Captura automática de transações em análise (`IuguHttpClient::captureInvoice` + `ChargeProcessor`)**: suporte a `POST /v1/invoices/{id}/capture` acionado automaticamente quando a Iugu responde `status === 'in_analysis'`.
+- **Enriquecimento e fallback de `CPF ou CNPJ`**: fallback padrão para `'CPF ou CNPJ'` em `Config.php`, `PayloadBuilder.php` e `iugucc.php`, além de enriquecimento automático de `customfields` no callback e hooks.
+- **Empacotamento e instalação**: `scripts/build-release.sh` e `scripts/install-on-whmcs.sh` passam a incluir `includes/hooks/iugucc_hooks_loader.php`.
+
+### Fixed (Corrigido)
+- **`PayloadBuilder::resolvePayerCpfCnpj()`**: suporte completo a mapas associativos escalares e arrays indexados de `customfields`.
+- **Compatibilidade com o simulador (`iugucc_hasRealCapsuleSchema()`)**: guarda de schema real do WHMCS nos hooks para execução limpa em `tests/whmcs_finance_sim.js`.
+
+---
+
 ## [Unreleased] - 2026-11-13
 
 ### Fixed (Corrigido)

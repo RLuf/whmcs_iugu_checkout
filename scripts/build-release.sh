@@ -14,6 +14,7 @@ const out = process.argv[2];
 const files = [];
 const walk = (d) => fs.readdirSync(d, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name)).forEach((e) => { const p = path.join(d, e.name); e.isDirectory() ? walk(p) : files.push(p); });
 walk('modules');
+if (fs.existsSync('includes')) walk('includes');
 files.push('scripts/install-on-whmcs.sh', 'docs/INSTALLATION_WHMCS.md');
 const crcTable = Array.from({ length: 256 }, (_, n) => { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1; return c >>> 0; });
 const crc32 = (buf) => { let c = 0xffffffff; for (const b of buf) c = crcTable[(c ^ b) & 0xff] ^ (c >>> 8); return (c ^ 0xffffffff) >>> 0; };

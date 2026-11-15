@@ -146,7 +146,9 @@ final class ChargeProcessor
         }
 
         $iuguToken = trim((string) ($requestData['iugu_token'] ?? ''));
-        if ($iuguToken === '') {
+        $customerPaymentMethodId = trim((string) ($requestData['customer_payment_method_id'] ?? ''));
+        $customerId = trim((string) ($requestData['customer_id'] ?? ''));
+        if ($iuguToken === '' && $customerPaymentMethodId === '') {
             return [
                 'success' => false,
                 'invoice_id' => (string) $invoiceId,
@@ -171,7 +173,10 @@ final class ChargeProcessor
                 $invoiceId,
                 $amount,
                 $clientDetails,
-                $installments
+                $installments,
+                'imovelsite.com.br',
+                $customerPaymentMethodId,
+                $customerId
             );
 
             $apiResponse = $this->httpClient->charge($chargePayload);
@@ -181,8 +186,21 @@ final class ChargeProcessor
             $chargeSuccess = (bool) ($body['success'] ?? false);
             $lrCode = trim((string) ($body['LR'] ?? ''));
             $iuguInvoiceId = trim((string) ($body['invoice_id'] ?? ''));
+            $chargeStatus = strtolower(trim((string) ($body['status'] ?? '')));
 
             if ($chargeSuccess && ($httpCode >= 200 && $httpCode < 300) && $iuguInvoiceId !== '') {
+                if ($chargeStatus === 'in_analysis') {
+                    try {
+                        $captureResponse = $this->httpClient->captureInvoice($iuguInvoiceId);
+                        $body['capture_http_code'] = $captureResponse['http_code'];
+                        if (!empty($captureResponse['body']['status'])) {
+                            $body['captured_status'] = $captureResponse['body']['status'];
+                        }
+                    } catch (Throwable $captureException) {
+                        $body['capture_warning'] = $captureException->getMessage();
+                    }
+                }
+
                 $gatewayFee = $this->resolveGatewayFee($iuguInvoiceId);
 
                 $this->logToWhmcs(
@@ -223,6 +241,24 @@ final class ChargeProcessor
                     }
                 }
 
+                $extraData = [];
+                if (isset($whmcsCallbacks['onPaymentSuccess']) && is_callable($whmcsCallbacks['onPaymentSuccess'])) {
+                    try {
+                        $callbackResult = ($whmcsCallbacks['onPaymentSuccess'])(
+                            (int) $invoiceId,
+                            $iuguInvoiceId,
+                            $body,
+                            $requestData,
+                            $clientDetails
+                        );
+                        if (is_array($callbackResult)) {
+                            $extraData = $callbackResult;
+                        }
+                    } catch (Throwable $hookError) {
+                        // Non-fatal post-payment callback error must not mask successful payment
+                    }
+                }
+
                 return [
                     'success' => true,
                     'invoice_id' => (string) $invoiceId,
@@ -230,7 +266,7 @@ final class ChargeProcessor
                     'lr_code' => $lrCode !== '' ? $lrCode : '00',
                     'message' => self::translateMessage('00', $body, $isEn),
                     'fee' => $gatewayFee,
-                ];
+                ] + $extraData;
             }
 
             // Declined or API validation error

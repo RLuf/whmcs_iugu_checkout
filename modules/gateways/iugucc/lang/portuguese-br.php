@@ -34,4 +34,5 @@ return [
     'err_sandbox_token_missing' => 'Modo Sandbox ativo sem Token de API de Teste. Informe o token do tipo Teste da Iugu na configuração do gateway (o token de produção não aceita cartões de teste).',
     'err_not_configured' => 'Este meio de pagamento está em manutenção (credenciais Iugu pendentes de configuração no WHMCS).',
     'success_redirecting' => 'Pagamento aprovado! Atualizando sua fatura e liberando seus serviços...',
+    'access_panel_button' => 'Acessar Painel do Serviço',
 ];

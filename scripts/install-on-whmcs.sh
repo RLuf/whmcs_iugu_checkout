@@ -120,6 +120,9 @@ if [ "$MODE" = "dry-run" ]; then
 fi
 
 for f in "${FILES_TOP[@]}"; do install -m 0644 "$SRC/$f" "$WHMCS_ROOT/$f"; done
+if [ -f "$SRC/includes/hooks/iugucc_hooks_loader.php" ] && [ -d "$WHMCS_ROOT/includes/hooks" ]; then
+  install -m 0644 "$SRC/includes/hooks/iugucc_hooks_loader.php" "$WHMCS_ROOT/includes/hooks/iugucc_hooks_loader.php"
+fi
 rm -rf "${WHMCS_ROOT:?}/$DIR_MOD"
 mkdir -p "$WHMCS_ROOT/$DIR_MOD"
 (cd "$SRC/$DIR_MOD" && find . -type d -print0) | while IFS= read -r -d '' d; do mkdir -p "$WHMCS_ROOT/$DIR_MOD/$d"; chmod 0755 "$WHMCS_ROOT/$DIR_MOD/$d"; done

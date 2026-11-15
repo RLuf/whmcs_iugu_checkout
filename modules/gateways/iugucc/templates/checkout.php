@@ -24,7 +24,7 @@ declare(strict_types=1);
 
 $esc = static fn(string $val): string => htmlspecialchars($val, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
 ?>
-<link rel="stylesheet" href="<?= $esc($assetBaseUrl) ?>/assets/css/iugucc.css?v=1.1.0">
+<link rel="stylesheet" href="<?= $esc($assetBaseUrl) ?>/assets/css/iugucc.css?v=1.2.0">
 
 <div class="iugucc-checkout-wrapper" id="iugucc-checkout-container">
     <div class="iugucc-header">
@@ -155,9 +155,29 @@ $esc = static fn(string $val): string => htmlspecialchars($val, ENT_QUOTES | ENT
 </div>
 
 <script src="<?= $esc($iuguJsUrl) ?>"></script>
-<script src="<?= $esc($assetBaseUrl) ?>/assets/js/iugucc.js?v=1.1.0"></script>
+<script src="<?= $esc($assetBaseUrl) ?>/assets/js/iugucc.js?v=1.2.0"></script>
 <script>
+// Prevent WHMCS forwardpage.tpl 5s auto-submit when interactive checkout renders directly on cart.php
+window.autoSubmitFormByContainer = function () {};
 document.addEventListener('DOMContentLoaded', function () {
+    window.autoSubmitFormByContainer = function () {};
+    var frmPayment = document.getElementById('frmPayment');
+    if (frmPayment) {
+        var loadingImgs = frmPayment.querySelectorAll('img');
+        for (var i = 0; i < loadingImgs.length; i++) {
+            if ((loadingImgs[i].getAttribute('src') || '').indexOf('loading') !== -1) {
+                loadingImgs[i].style.display = 'none';
+            }
+        }
+        var infoAlerts = document.querySelectorAll('.alert.alert-info');
+        for (var j = 0; j < infoAlerts.length; j++) {
+            var alertText = infoAlerts[j].textContent || '';
+            if (alertText.indexOf('gateway') !== -1 || alertText.indexOf('redirecionad') !== -1 || alertText.indexOf('redirected') !== -1) {
+                infoAlerts[j].style.display = 'none';
+            }
+        }
+    }
+
     if (window.IuguCCCheckout && typeof window.IuguCCCheckout.initCheckoutForm === 'function') {
         window.IuguCCCheckout.initCheckoutForm(<?= json_encode([
             'formId' => 'iugucc-payment-form',
@@ -165,9 +185,14 @@ document.addEventListener('DOMContentLoaded', function () {
             'sandboxMode' => $isSandbox,
             'invoiceId' => $invoiceId,
             'callbackUrl' => $callbackUrl,
+            'invoiceReturnUrl' => $invoiceReturnUrl ?? ($systemUrl . '/viewinvoice.php?id=' . $invoiceId . '&paymentsuccess=true'),
+            'isCartCheckoutPage' => !empty($isCartCheckoutPage),
             'signature' => $signature,
             'i18n' => $lang,
         ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>);
     }
+});
+window.addEventListener('load', function () {
+    window.autoSubmitFormByContainer = function () {};
 });
 </script>
