@@ -35,4 +35,6 @@ return [
     'err_not_configured' => 'This payment gateway is currently unavailable (Iugu credentials pending configuration in WHMCS).',
     'success_redirecting' => 'Payment approved! Updating your invoice and activating your services...',
     'access_panel_button' => 'Access Service Panel',
+    'success_btn_site_admin' => 'Access Site Panel',
+    'success_btn_wp_admin' => 'Access Site Panel (WP-Admin)',
 ];

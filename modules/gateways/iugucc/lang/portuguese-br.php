@@ -35,4 +35,6 @@ return [
     'err_not_configured' => 'Este meio de pagamento está em manutenção (credenciais Iugu pendentes de configuração no WHMCS).',
     'success_redirecting' => 'Pagamento aprovado! Atualizando sua fatura e liberando seus serviços...',
     'access_panel_button' => 'Acessar Painel do Serviço',
+    'success_btn_site_admin' => 'Acessar Painel do Site',
+    'success_btn_wp_admin' => 'Acessar Painel do Site (WP-Admin)',
 ];

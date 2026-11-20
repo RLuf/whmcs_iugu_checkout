@@ -129,6 +129,7 @@ if (!function_exists('iugucc_resolveInvoiceServicePanel')) {
         try {
             $service = Capsule::table('tblinvoiceitems as ii')
                 ->join('tblhosting as h', 'h.id', '=', 'ii.relid')
+                ->leftJoin('tblproducts as p', 'p.id', '=', 'h.packageid')
                 ->where('ii.invoiceid', $invoiceId)
                 ->where('ii.type', 'Hosting')
                 ->orderBy('h.id', 'asc')
@@ -138,6 +139,8 @@ if (!function_exists('iugucc_resolveInvoiceServicePanel')) {
                     'h.packageid',
                     'h.domain',
                     'h.domainstatus',
+                    'p.servertype as product_servertype',
+                    'p.name as product_name',
                 ])
                 ->first();
 
@@ -146,6 +149,7 @@ if (!function_exists('iugucc_resolveInvoiceServicePanel')) {
             }
 
             $serviceId = (int) $service->service_id;
+            $packageId = (int) ($service->packageid ?? 0);
             $domain = trim((string) ($service->domain ?? ''));
             $status = trim((string) ($service->domainstatus ?? ''));
 
@@ -158,18 +162,57 @@ if (!function_exists('iugucc_resolveInvoiceServicePanel')) {
                 }
             }
 
+            if ($domain === '' && $packageId > 0 && Capsule::schema()->hasTable('tblcustomfieldsvalues') && Capsule::schema()->hasTable('tblcustomfields')) {
+                $cfRows = Capsule::table('tblcustomfieldsvalues as cfv')
+                    ->join('tblcustomfields as cf', 'cf.id', '=', 'cfv.fieldid')
+                    ->where('cf.type', 'product')
+                    ->where('cf.relid', $packageId)
+                    ->where('cfv.relid', $serviceId)
+                    ->select(['cf.fieldname', 'cfv.value'])
+                    ->get();
+                foreach ($cfRows as $cfRow) {
+                    $fname = strtolower(trim((string) ($cfRow->fieldname ?? '')));
+                    if (str_starts_with($fname, 'prefix') || str_contains($fname, 'prefixo do site')) {
+                        $prefix = strtolower(trim((string) ($cfRow->value ?? '')));
+                        if ($prefix !== '') {
+                            if (str_contains($prefix, '.')) {
+                                $domain = $prefix;
+                            } elseif (preg_match('/^[a-z0-9][a-z0-9-]{0,61}[a-z0-9]$/', $prefix) === 1) {
+                                $domain = $prefix . '.imovelsite.com.br';
+                            }
+                            break;
+                        }
+                    }
+                }
+            }
+
+            $serverType = strtolower(trim((string) ($service->product_servertype ?? '')));
+            $productName = strtolower(trim((string) ($service->product_name ?? '')));
+            $isNext = ($serverType === 'imovelsitenext')
+                || ($packageId === 177)
+                || (str_contains($productName, 'next') && !str_contains($productName, 'basic'));
+
             $base = $systemUrl !== '' ? rtrim($systemUrl, '/') . '/' : '';
             $panelUrl = $base . 'clientarea.php?action=productdetails&id=' . $serviceId;
             $siteUrl = $domain !== '' ? 'https://' . ltrim($domain, '/') : '';
-            $wpAdminUrl = $siteUrl !== '' ? rtrim($siteUrl, '/') . '/wp-admin' : '';
+            $panelType = $isNext ? 'imovelsitenext' : 'wordpress';
+            $adminPath = $isNext ? '/admin/login' : '/wp-admin';
+            $adminUrl = $siteUrl !== '' ? rtrim($siteUrl, '/') . $adminPath : '';
+            $ssoUrl = ($isNext && $base !== '' && $serviceId > 0)
+                ? $base . 'clientarea.php?action=productdetails&id=' . $serviceId . '&dosinglesignon=1'
+                : '';
 
             return [
                 'service_id' => $serviceId,
+                'package_id' => $packageId,
+                'panel_type' => $panelType,
                 'domain' => $domain,
                 'status' => $status,
                 'panel_url' => $panelUrl,
                 'site_url' => $siteUrl,
-                'wp_admin_url' => $wpAdminUrl,
+                'admin_url' => $adminUrl,
+                'wp_admin_url' => $adminUrl,
+                'sso_url' => $ssoUrl,
             ];
         } catch (Throwable $e) {
             return [];
@@ -495,8 +538,137 @@ if (!function_exists('iugucc_attemptAutoRenewal')) {
     }
 }
 
+if (!function_exists('iugucc_ensureEdvanCompatibility')) {
+    /**
+     * Sentinel Auto-Healing guard against Edvan's `saldoIugu` widget query
+     * (`SELECT * FROM tblpaymentgateways WHERE gateway LIKE '%iugu%' LIMIT 1`).
+     *
+     * 1. Ensures `iugucc` rows always reside physically and by `id` AFTER `iugu` rows
+     *    in `tblpaymentgateways` (preventing MyISAM slot reuse from putting `iugucc` first).
+     * 2. Mirrors `token` compatibility metadata onto `iugucc` so `saldoIugu` never receives
+     *    a blank token even if `getGatewayVariables('iugucc')` were ever queried by mistake.
+     *
+     * @return array<string, mixed>
+     */
+    function iugucc_ensureEdvanCompatibility(): array
+    {
+        if (!iugucc_hasRealCapsuleSchema()) {
+            return ['checked' => false, 'reason' => 'no_capsule_schema'];
+        }
+
+        try {
+            $iuguccExists = Capsule::table('tblpaymentgateways')
+                ->where('gateway', Config::GATEWAY_NAME)
+                ->exists();
+
+            if (!$iuguccExists) {
+                return ['checked' => true, 'active' => false];
+            }
+
+            // Layer 2: Mirror fallback `token` setting on `iugucc` if missing/outdated
+            $iuguTokenVal = (string) (Capsule::table('tblpaymentgateways')
+                ->where('gateway', 'iugu')
+                ->where('setting', 'token')
+                ->value('value') ?? '');
+
+            if ($iuguTokenVal === '') {
+                $iuguTokenVal = (string) (Capsule::table('tblpaymentgateways')
+                    ->where('gateway', Config::GATEWAY_NAME)
+                    ->where('setting', 'apiToken')
+                    ->value('value') ?? '');
+            }
+
+            $tokenSynced = false;
+            if ($iuguTokenVal !== '') {
+                $existingTokenRow = Capsule::table('tblpaymentgateways')
+                    ->where('gateway', Config::GATEWAY_NAME)
+                    ->where('setting', 'token')
+                    ->first();
+
+                if ($existingTokenRow === null) {
+                    Capsule::table('tblpaymentgateways')->insert([
+                        'gateway' => Config::GATEWAY_NAME,
+                        'setting' => 'token',
+                        'value' => $iuguTokenVal,
+                        'order' => 99,
+                    ]);
+                    $tokenSynced = true;
+                } elseif ((string) ($existingTokenRow->value ?? '') !== $iuguTokenVal) {
+                    Capsule::table('tblpaymentgateways')
+                        ->where('id', (int) $existingTokenRow->id)
+                        ->update(['value' => $iuguTokenVal, 'order' => 99]);
+                    $tokenSynced = true;
+                }
+            }
+
+            // Layer 1: Ensure `iugu` appears before `iugucc` by ID and physical MyISAM order
+            $maxIuguId = (int) (Capsule::table('tblpaymentgateways')
+                ->where('gateway', 'iugu')
+                ->max('id') ?? 0);
+            $minIuguccId = (int) (Capsule::table('tblpaymentgateways')
+                ->where('gateway', Config::GATEWAY_NAME)
+                ->min('id') ?? 0);
+
+            $conn = Capsule::connection();
+            $firstLike = $conn->select("SELECT gateway FROM `tblpaymentgateways` WHERE `gateway` LIKE '%iugu%' LIMIT 1");
+            $firstGw = isset($firstLike[0]->gateway) ? (string) $firstLike[0]->gateway : '';
+
+            $reordered = false;
+            if ($maxIuguId > 0 && ($tokenSynced || $firstGw === Config::GATEWAY_NAME || ($minIuguccId > 0 && $minIuguccId < $maxIuguId))) {
+                if ($minIuguccId > 0 && $minIuguccId < $maxIuguccId) {
+                    $rows = Capsule::table('tblpaymentgateways')
+                        ->where('gateway', Config::GATEWAY_NAME)
+                        ->orderBy('id', 'asc')
+                        ->get();
+
+                    if (count($rows) > 0) {
+                        Capsule::table('tblpaymentgateways')
+                            ->where('gateway', Config::GATEWAY_NAME)
+                            ->delete();
+
+                        foreach ($rows as $row) {
+                            Capsule::table('tblpaymentgateways')->insert([
+                                'gateway' => (string) $row->gateway,
+                                'setting' => (string) $row->setting,
+                                'value' => (string) $row->value,
+                                'order' => (int) ($row->order ?? 0),
+                            ]);
+                        }
+                    }
+                }
+
+                $conn->statement('ALTER TABLE `tblpaymentgateways` ORDER BY `id` ASC');
+                $reordered = true;
+
+                $afterLike = $conn->select("SELECT gateway FROM `tblpaymentgateways` WHERE `gateway` LIKE '%iugu%' LIMIT 1");
+                $firstGw = isset($afterLike[0]->gateway) ? (string) $afterLike[0]->gateway : $firstGw;
+            }
+
+            return [
+                'checked' => true,
+                'active' => true,
+                'token_synced' => $tokenSynced,
+                'reordered' => $reordered,
+                'first_like_iugu' => $firstGw,
+            ];
+        } catch (Throwable $e) {
+            return ['checked' => false, 'error' => $e->getMessage()];
+        }
+    }
+}
+
+if (defined('ADMINAREA') && iugucc_hasRealCapsuleSchema()) {
+    iugucc_ensureEdvanCompatibility();
+}
+
 if (function_exists('add_hook') && !defined('IUGUCC_HOOKS_LOADED')) {
     define('IUGUCC_HOOKS_LOADED', true);
+
+    add_hook('AdminAreaPage', 1, static function (): void {
+        if (iugucc_hasRealCapsuleSchema()) {
+            iugucc_ensureEdvanCompatibility();
+        }
+    });
 
     add_hook('ClientAreaPageViewInvoice', 1, static function (array $vars): array {
         $invoiceId = (int) ($vars['invoiceid'] ?? ($_GET['id'] ?? 0));
@@ -518,7 +690,10 @@ if (function_exists('add_hook') && !defined('IUGUCC_HOOKS_LOADED')) {
         return [
             'iugucc_panel_url' => $panel['panel_url'],
             'iugucc_site_url' => $panel['site_url'],
+            'iugucc_admin_url' => $panel['admin_url'],
             'iugucc_wp_admin_url' => $panel['wp_admin_url'],
+            'iugucc_panel_type' => $panel['panel_type'],
+            'iugucc_sso_url' => $panel['sso_url'],
             'iugucc_site_domain' => $panel['domain'],
             'iugucc_service_id' => $panel['service_id'],
         ];
@@ -554,19 +729,28 @@ if (function_exists('add_hook') && !defined('IUGUCC_HOOKS_LOADED')) {
         }
 
         $esc = static fn (string $v): string => htmlspecialchars($v, ENT_QUOTES, 'UTF-8');
-        $domainHtml = $panel['domain'] !== ''
-            ? '<p style="margin:6px 0 12px;">Ambiente liberado: <strong>' . $esc($panel['domain']) . '</strong></p>'
-            : '<p style="margin:6px 0 12px;">Seu serviço já está ativo e pronto para uso.</p>';
+        $isNextPanel = (($panel['panel_type'] ?? '') === 'imovelsitenext');
+        $isActive = (strtolower((string) ($panel['status'] ?? '')) === 'active');
 
-        $wpBtn = $panel['wp_admin_url'] !== ''
-            ? ' <a href="' . $esc($panel['wp_admin_url']) . '" target="_blank" rel="noopener noreferrer" class="btn btn-default" style="margin-left:8px;">Acessar Painel do Site (WP-Admin)</a>'
+        if ($panel['domain'] !== '') {
+            $domainHtml = ($isNextPanel && !$isActive)
+                ? '<p style="margin:6px 0 12px;">Ambiente em preparação: <strong>' . $esc($panel['domain']) . '</strong> (liberação automática em instantes)</p>'
+                : '<p style="margin:6px 0 12px;">Ambiente liberado: <strong>' . $esc($panel['domain']) . '</strong></p>';
+        } else {
+            $domainHtml = '<p style="margin:6px 0 12px;">Seu serviço já está confirmado e pronto para uso.</p>';
+        }
+
+        $adminUrl = (string) ($panel['admin_url'] ?? $panel['wp_admin_url'] ?? '');
+        $adminLabel = $isNextPanel ? 'Acessar Painel do Site' : 'Acessar Painel do Site (WP-Admin)';
+        $siteAdminBtn = $adminUrl !== ''
+            ? ' <a href="' . $esc($adminUrl) . '" target="_blank" rel="noopener noreferrer" class="btn btn-default" style="margin-left:8px;">' . $adminLabel . '</a>'
             : '';
 
         $banner = '<div id="iugucc-panel-release-banner" class="alert alert-success text-center" style="margin:15px auto;max-width:720px;border-radius:8px;padding:18px 20px;">'
             . '<h4 style="margin-top:0;font-weight:700;color:#155724;">&#10004; Pagamento Confirmado e Serviço Liberado!</h4>'
             . $domainHtml
             . '<a href="' . $esc($panel['panel_url']) . '" class="btn btn-success btn-lg">Acessar Painel do Serviço</a>'
-            . $wpBtn
+            . $siteAdminBtn
             . '</div>';
 
         return '<script>(function(){'
@@ -588,6 +772,7 @@ if (function_exists('add_hook') && !defined('IUGUCC_HOOKS_LOADED')) {
             return;
         }
         iugucc_ensureSchema();
+        iugucc_ensureEdvanCompatibility();
 
         $dueWindow = date('Y-m-d', strtotime('+1 day'));
         $candidates = Capsule::table('tblinvoices as i')

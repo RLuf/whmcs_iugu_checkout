@@ -73,14 +73,24 @@ const alerts = (page) => page.evaluate(() => Array.from(document.querySelectorAl
 
 async function gatewaysAtCheckout(page, fromStorefront = false) {
     if (fromStorefront) {
-        // Start where the customer starts: the Imóvel Site home page, clicking "CONTRATE AGORA".
+        // Start where the customer starts: the Imóvel Site home page (ImóvelSite Next), navigating to /planos if needed.
         const storefront = process.env.E2E_STOREFRONT || 'https://imovelsite.com.br/';
         await page.goto(storefront, { waitUntil: 'domcontentloaded', timeout: 90000 });
         await settle(page, 2500);
-        const cta = page.locator(`a[href*="cart.php?a=add&pid=${PID}"]`).filter({ hasText: /contrate agora/i }).first();
-        const ctaText = (await cta.innerText()).trim();
-        await cta.evaluate((a) => a.removeAttribute('target'));
         await shot(page, 'storefront');
+        let cta = page.locator(`a[href*="cart.php?a=add&pid=${PID}"]`).first();
+        if (!(await cta.count())) {
+            const plansLink = page.locator('a[href*="/planos"]').first();
+            if (await plansLink.count()) {
+                await Promise.all([page.waitForURL(/\/planos/, { timeout: 60000 }).catch(() => {}), plansLink.click()]);
+                await settle(page, 2000);
+                await shot(page, 'storefront_planos');
+            }
+            cta = page.locator(`a[href*="cart.php?a=add&pid=${PID}"]`).filter({ hasText: /escolher|contratar/i }).first();
+            if (!(await cta.count())) cta = page.locator(`a[href*="cart.php?a=add&pid=${PID}"]`).first();
+        }
+        const ctaText = ((await cta.innerText().catch(() => 'Contratar')) || 'Contratar').trim();
+        await cta.evaluate((a) => a.removeAttribute('target')).catch(() => {});
         await Promise.all([page.waitForURL(/cart\.php/, { timeout: 90000 }), cta.click()]);
         check(/cart\.php\?a=(add|confproduct)/.test(page.url()), `Botão "${ctaText}" do ${storefront} leva ao carrinho do WHMCS`, page.url());
     } else {
@@ -375,39 +385,66 @@ async function full(page) {
     if (!check(!!access && !!access.pass, 'E-mail de acesso ao site recebido (link e senha provisória)', access ? `${access.subject} — ${access.url || 'sem link'}` : 'nenhum e-mail além dos de pedido/fatura')) return;
 
     // ---- 7. site admin: log in and register a property ------------------------------------------------------
-    const adminUrl = access.url || `${site}wp-login.php`;
+    const isWordPress = /wp-login|wp-admin/i.test(access.url || '');
+    const adminUrl = access.url || `${site}admin/login`;
     await page.goto(adminUrl, { waitUntil: 'domcontentloaded', timeout: 60000 }); await settle(page, 2000);
-    if (await page.locator('#user_login').count()) {
+    if (await page.locator('input[name="email"]').count() && await page.locator('input[name="password"]').count()) {
+        await page.fill('input[name="email"]', access.user || st.email);
+        await page.fill('input[name="password"]', access.pass);
+        await Promise.all([page.waitForLoadState('domcontentloaded').catch(() => {}), page.click('button[type="submit"]')]);
+        await settle(page, 4000);
+    } else if (await page.locator('#user_login').count()) {
         await page.fill('#user_login', access.user || st.email);
         await page.fill('#user_pass', access.pass);
         await Promise.all([page.waitForLoadState('domcontentloaded').catch(() => {}), page.click('#wp-submit')]);
         await settle(page, 4000);
     }
-    const menu = await page.evaluate(() => Array.from(document.querySelectorAll('#adminmenu a, nav a, .sidebar a')).map((a) => ({ t: (a.innerText || '').trim().replace(/\s+/g, ' ').slice(0, 50), h: a.href })).filter((m) => m.t));
+    const menu = await page.evaluate(() => Array.from(document.querySelectorAll('#adminmenu a, .admin-sidebar nav a, nav a, .sidebar a')).map((a) => ({ t: (a.innerText || '').trim().replace(/\s+/g, ' ').slice(0, 50), h: a.href })).filter((m) => m.t));
     report.admin_menu = menu.slice(0, 60);
     await shot(page, 'site_admin');
-    if (!check(/wp-admin|painel|dashboard|admin/i.test(page.url()) && menu.length > 0, 'Login no painel do site provisionado', page.url())) return;
-    const novo = menu.find((m) => /post-new\.php\?post_type=/i.test(m.h) && /im[óo]ve/i.test(m.t + m.h)) || menu.find((m) => /im[óo]ve/i.test(m.t) && /post_type=/i.test(m.h));
-    if (!check(!!novo, 'Menu de cadastro de imóveis encontrado no painel', novo ? `${novo.t} — ${novo.h}` : menu.map((m) => m.t).slice(0, 25).join(', '))) return;
-    const postType = (novo.h.match(/post_type=([a-z0-9_-]+)/i) || [])[1];
-    await page.goto(new URL(`post-new.php?post_type=${postType}`, novo.h).toString(), { waitUntil: 'domcontentloaded', timeout: 60000 }); await settle(page, 4000);
+    if (!check(/wp-admin|painel|dashboard|admin/i.test(page.url()) && !/\/admin\/login/i.test(page.url()) && menu.length > 0, 'Login no painel do site provisionado', page.url())) return;
     const title = `Casa de teste automatizado ${new Date().toISOString().slice(0, 16)}`;
-    if (await page.locator('#title').count()) {
-        await page.fill('#title', title);
-        await Promise.all([page.waitForLoadState('domcontentloaded').catch(() => {}), page.click('#publish')]);
+    if (!isWordPress && menu.some((m) => /\/admin\/imoveis/.test(m.h))) {
+        await page.goto(`${site}admin/imoveis/novo`, { waitUntil: 'domcontentloaded', timeout: 60000 }); await settle(page, 2500);
+        await page.fill('input[name="title"]', title);
+        await page.fill('input[name="code"]', 'E2E' + Date.now().toString().slice(-6));
+        await page.selectOption('select[name="purpose"]', 'sale').catch(() => {});
+        await page.fill('input[name="type"]', 'Casa');
+        await page.selectOption('select[name="status"]', 'published').catch(() => {});
+        await page.fill('textarea[name="description"]', 'Imóvel de teste automatizado criado via E2E do módulo Iugu.');
+        await page.fill('input[name="city"]', 'Novo Hamburgo');
+        await page.fill('input[name="state"]', 'RS');
+        await page.fill('input[name="neighborhood"]', 'Centro');
+        await Promise.all([page.waitForLoadState('domcontentloaded').catch(() => {}), page.click('button[type="submit"]')]);
+        await settle(page, 3500);
+        await shot(page, 'property_saved');
+        const saved = await page.evaluate(() => document.body.innerText.replace(/\s+/g, ' ')).then((t) => /im[óo]vel salvo|publicado|editar im[óo]vel/i.test(t) || /\/admin\/imoveis\/\d+/.test(location.href));
+        check(saved, 'Imóvel cadastrado no painel do ImóvelSite Next', title);
+        await page.goto(`${site}imoveis`, { waitUntil: 'domcontentloaded', timeout: 60000 }); await settle(page, 2500);
+        check((await page.evaluate(() => document.body.innerText)).includes('Casa de teste automatizado'), 'Imóvel cadastrado aparece no site público');
+        await shot(page, 'site_with_property');
     } else {
-        await page.locator('.editor-post-title__input, h1[contenteditable="true"]').first().fill(title);
-        await page.locator('.editor-post-publish-panel__toggle, .editor-post-publish-button__button').first().click();
-        await page.waitForTimeout(1500);
-        await page.locator('.editor-post-publish-panel .editor-post-publish-button, .editor-post-publish-button').first().click().catch(() => {});
+        const novo = menu.find((m) => /post-new\.php\?post_type=/i.test(m.h) && /im[óo]ve/i.test(m.t + m.h)) || menu.find((m) => /im[óo]ve/i.test(m.t) && /post_type=/i.test(m.h));
+        if (!check(!!novo, 'Menu de cadastro de imóveis encontrado no painel', novo ? `${novo.t} — ${novo.h}` : menu.map((m) => m.t).slice(0, 25).join(', '))) return;
+        const postType = (novo.h.match(/post_type=([a-z0-9_-]+)/i) || [])[1];
+        await page.goto(new URL(`post-new.php?post_type=${postType}`, novo.h).toString(), { waitUntil: 'domcontentloaded', timeout: 60000 }); await settle(page, 4000);
+        if (await page.locator('#title').count()) {
+            await page.fill('#title', title);
+            await Promise.all([page.waitForLoadState('domcontentloaded').catch(() => {}), page.click('#publish')]);
+        } else {
+            await page.locator('.editor-post-title__input, h1[contenteditable="true"]').first().fill(title);
+            await page.locator('.editor-post-publish-panel__toggle, .editor-post-publish-button__button').first().click();
+            await page.waitForTimeout(1500);
+            await page.locator('.editor-post-publish-panel .editor-post-publish-button, .editor-post-publish-button').first().click().catch(() => {});
+        }
+        await settle(page, 5000);
+        await shot(page, 'property_saved');
+        const saved = await page.evaluate(() => document.body.innerText.replace(/\s+/g, ' ')).then((t) => /publicad|published|atualizad|post=\d+/i.test(t + location.href));
+        check(saved, 'Imóvel cadastrado no painel do site', title);
+        await page.goto(site, { waitUntil: 'domcontentloaded', timeout: 60000 }); await settle(page, 2500);
+        check((await page.evaluate(() => document.body.innerText)).includes('Casa de teste automatizado'), 'Imóvel cadastrado aparece no site público');
+        await shot(page, 'site_with_property');
     }
-    await settle(page, 5000);
-    await shot(page, 'property_saved');
-    const saved = await page.evaluate(() => document.body.innerText.replace(/\s+/g, ' ')).then((t) => /publicad|published|atualizad|post=\d+/i.test(t + location.href));
-    check(saved, 'Imóvel cadastrado no painel do site', title);
-    await page.goto(site, { waitUntil: 'domcontentloaded', timeout: 60000 }); await settle(page, 2500);
-    check((await page.evaluate(() => document.body.innerText)).includes('Casa de teste automatizado'), 'Imóvel cadastrado aparece no site público');
-    await shot(page, 'site_with_property');
 }
 
 (async () => {

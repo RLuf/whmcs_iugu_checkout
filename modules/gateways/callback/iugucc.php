@@ -33,11 +33,53 @@ use WHMCS\Module\Gateway\IuguCC\IuguHttpClient;
 use WHMCS\Module\Gateway\IuguCC\WebhookHandler;
 
 $gatewayModuleName = Config::GATEWAY_NAME;
-$gatewayParams = getGatewayVariables($gatewayModuleName);
+
+// Parse incoming request (supports application/json and application/x-www-form-urlencoded)
+$rawInput = (string) file_get_contents('php://input');
+$jsonInput = [];
+if ($rawInput !== '' && str_starts_with(trim($rawInput), '{')) {
+    $decoded = json_decode($rawInput, true);
+    if (is_array($decoded)) {
+        $jsonInput = $decoded;
+    }
+}
+$requestData = array_merge($_GET, $_POST, $jsonInput);
+$action = strtolower(trim((string) ($requestData['action'] ?? '')));
+$isCheckoutRequest = ($action === 'checkout' || isset($requestData['iugu_token']));
+
+// Guard: avoid WHMCS getGatewayVariables() fatal ProgramExit (HTTP 500) when gateway is inactive
+if (function_exists('iugucc_hasRealCapsuleSchema') && iugucc_hasRealCapsuleSchema()) {
+    $isActiveInDb = Capsule::table('tblpaymentgateways')
+        ->where('gateway', $gatewayModuleName)
+        ->where('setting', 'type')
+        ->exists();
+    if ($isActiveInDb) {
+        try {
+            $gatewayParams = getGatewayVariables($gatewayModuleName);
+        } catch (Throwable $e) {
+            $gatewayParams = [];
+        }
+    } else {
+        $gatewayParams = [];
+    }
+} else {
+    $gatewayParams = getGatewayVariables($gatewayModuleName);
+}
 
 if (empty($gatewayParams['type'])) {
-    http_response_code(503);
     header('Content-Type: application/json; charset=utf-8');
+    if (!$isCheckoutRequest) {
+        http_response_code(200);
+        echo json_encode([
+            'status' => 'ignored',
+            'processed' => false,
+            'action' => 'gateway_inactive',
+            'message' => 'Gateway module iugucc is not active in WHMCS; webhook ignored safely.',
+        ]);
+        exit;
+    }
+
+    http_response_code(503);
     echo json_encode(['success' => false, 'message' => 'Gateway module iugucc is not active in WHMCS.']);
     exit;
 }
@@ -65,17 +107,6 @@ if (!$config->isConfigured()) {
 }
 
 $httpClient = new IuguHttpClient($config->getActiveApiToken());
-
-// Parse incoming request (supports application/json and application/x-www-form-urlencoded)
-$rawInput = (string) file_get_contents('php://input');
-$jsonInput = [];
-if ($rawInput !== '' && str_starts_with(trim($rawInput), '{')) {
-    $decoded = json_decode($rawInput, true);
-    if (is_array($decoded)) {
-        $jsonInput = $decoded;
-    }
-}
-$requestData = array_merge($_GET, $_POST, $jsonInput);
 
 // Build standard WHMCS callback bridges
 $whmcsCallbacks = [
@@ -116,12 +147,10 @@ $whmcsCallbacks = [
     },
 ];
 
-$action = strtolower(trim((string) ($requestData['action'] ?? '')));
-
 // ============================================================================
 // MODE 1: Synchronous Client-Side Tokenized Checkout Submission
 // ============================================================================
-if ($action === 'checkout' || isset($requestData['iugu_token'])) {
+if ($isCheckoutRequest) {
     header('Content-Type: application/json; charset=utf-8');
 
     $invoiceId = (int) ($requestData['invoice_id'] ?? 0);
@@ -323,8 +352,12 @@ if ($action === 'checkout' || isset($requestData['iugu_token'])) {
         return [
             'panel_url' => $panel['panel_url'] ?? null,
             'site_url' => $panel['site_url'] ?? null,
+            'admin_url' => $panel['admin_url'] ?? ($panel['wp_admin_url'] ?? null),
             'wp_admin_url' => $panel['wp_admin_url'] ?? null,
+            'panel_type' => $panel['panel_type'] ?? null,
+            'sso_url' => $panel['sso_url'] ?? null,
             'service_id' => $panel['service_id'] ?? null,
+            'service_panel' => !empty($panel) ? $panel : null,
         ];
     };
 
@@ -348,8 +381,12 @@ if ($action === 'checkout' || isset($requestData['iugu_token'])) {
         'message' => $result['message'],
         'panel_url' => $result['panel_url'] ?? null,
         'site_url' => $result['site_url'] ?? null,
+        'admin_url' => $result['admin_url'] ?? ($result['wp_admin_url'] ?? null),
         'wp_admin_url' => $result['wp_admin_url'] ?? null,
+        'panel_type' => $result['panel_type'] ?? null,
+        'sso_url' => $result['sso_url'] ?? null,
         'service_id' => $result['service_id'] ?? null,
+        'service_panel' => $result['service_panel'] ?? null,
         'redirect_url' => $result['success'] ? $redirectUrl : null,
     ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     exit;
