@@ -235,6 +235,10 @@ final class SentinelAuditor
             }
         }
 
+        $edvanCoexistence = function_exists('iugucc_ensureEdvanCompatibility')
+            ? iugucc_ensureEdvanCompatibility()
+            : ['checked' => false, 'reason' => 'hooks_not_loaded'];
+
         $greenLight = $phpOk && $allExtensionsOk && $filesOk;
         if ($handshakeStatus['attempted'] && !$handshakeStatus['reachable']) {
             $greenLight = false;
@@ -258,6 +262,7 @@ final class SentinelAuditor
                 ],
                 'configuration' => $configStatus,
                 'iugu_api_handshake' => $handshakeStatus,
+                'edvan_coexistence' => $edvanCoexistence,
             ],
         ];
     }

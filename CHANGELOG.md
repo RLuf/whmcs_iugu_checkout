@@ -5,12 +5,22 @@ O formato é baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.
 
 ---
 
+## [Unreleased] - 2026-11-20
+
+### Fixed (Corrigido)
+- **Auto-Healing contra colisão `LIKE '%iugu%' LIMIT 1` no widget `Saldo iugu` do Edvan (`hooks.php` + `SentinelAuditor.php`)**: `iugucc_ensureEdvanCompatibility()` garante automaticamente (em `ADMINAREA`, `AdminAreaPage`, `DailyCronJob` e `SentinelAuditor::runInstallationWatchdog()`) que as linhas de `iugucc` em `tblpaymentgateways` fiquem sempre com `id` e posição física (`ALTER TABLE tblpaymentgateways ORDER BY id ASC`) posteriores ao gateway `iugu`, além de espelhar o metadado de compatibilidade `token`, impedindo o falso erro `"TOKEN inválido!"` no widget de saldo mesmo após edições no Admin.
+- **Proteção de webhook com gateway inativo ou eventos não-fatura (`callback/iugucc.php` + `WebhookHandler.php`)**: evita o erro fatal `HTTP 500` (`Gateway Module "iugucc" Not Activated`) ao checar o status ativo do gateway em `tblpaymentgateways` antes de chamar `getGatewayVariables()` para webhooks assíncronos (respondendo `HTTP 200` seguro com `action: gateway_inactive`), e passa a responder `HTTP 200` (`ignored_non_invoice_event`) para eventos globais sem `data[id]` que não comecem com `invoice.`, interrompendo loops de retentativa na Iugu.
+
+---
+
 ## [1.2.0-rc.1] - 2026-11-15 (Pre-Release)
 
 ### Added (Adicionado)
 - **Checkout transparente inline no carrinho (`cart.php` + `viewinvoice.php`)**: `iugucc_isInvoicePage()` passa a renderizar o formulário tokenizado diretamente em `viewinvoice.php` e `cart.php`, neutralizando o auto-redirect de `forwardpage.tpl` (`window.autoSubmitFormByContainer`) para conclusão do pagamento sem sair da tela de contratação (fora dessas páginas, como em e-mails de fatura, segue devolvendo apenas o botão para a fatura).
 - **Cofre de cartões e renovação automática 1x (`hooks.php` + `includes/hooks/iugucc_hooks_loader.php`)**: criação das tabelas `mod_iugucc_cards` e `mod_iugucc_autorenew_log` para tokenização em cliente Iugu (`POST /v1/customers` + `POST /v1/customers/{id}/payment_methods`) e cobrança recorrente automática à vista (`InvoiceCreationPreEmail` / `DailyCronJob`), preservando o primeiro pagamento manual de pedidos iniciais (`tblorders`).
-- **Liberação imediata pós-pagamento (`callback/iugucc.php` + `iugucc.js`)**: no retorno síncrono aprovado, o endpoint inclui `panel_url`, `site_url`, `wp_admin_url` e `service_id`, exibindo o botão imediato **"Acessar Painel do Serviço"** com redirecionamento automático e banner de confirmação via hook na área do cliente.
+- **Liberação imediata pós-pagamento (`callback/iugucc.php` + `iugucc.js`)**: no retorno síncrono aprovado, o endpoint inclui `panel_url`, `site_url`, `admin_url`, `wp_admin_url` (alias), `panel_type`, `sso_url`, `service_panel` e `service_id`, exibindo o botão imediato **"Acessar Painel do Serviço"** com redirecionamento automático e banner de confirmação via hook na área do cliente.
+- **Separação ImóvelSite Next (`pid=177` / `imovelsitenext`) vs. `imovelsite-basic` (`pid=89`)**: `iugucc_resolveInvoiceServicePanel()` faz `leftJoin` em `tblproducts` e fallback para os custom fields `Prefixo do Site` / `prefix` quando `tblhosting.domain` ainda estiver vazio, direcionando planos Next para `/admin/login` (e link SSO via `dosinglesignon=1`, rótulo `success_btn_site_admin` — *"Acessar Painel do Site"*, além de estado *"Ambiente em preparação"*), enquanto planos legados `imovelsite-basic` permanecem apontando para `/wp-admin` (`success_btn_wp_admin`).
+- **Atualização do fluxo E2E (`tests/e2e/live_flow.js`)**: checkout e validação de contratação atualizados para a vitrine na raiz `/` -> `/planos` -> `cart.php?a=add&pid=177`, mantendo suporte ao fluxo `/admin/login` + `/admin/imoveis/novo` + `/imoveis` (com fallback WP).
 - **Captura automática de transações em análise (`IuguHttpClient::captureInvoice` + `ChargeProcessor`)**: suporte a `POST /v1/invoices/{id}/capture` acionado automaticamente quando a Iugu responde `status === 'in_analysis'`.
 - **Enriquecimento e fallback de `CPF ou CNPJ`**: fallback padrão para `'CPF ou CNPJ'` em `Config.php`, `PayloadBuilder.php` e `iugucc.php`, além de enriquecimento automático de `customfields` no callback e hooks.
 - **Empacotamento e instalação**: `scripts/build-release.sh` e `scripts/install-on-whmcs.sh` passam a incluir `includes/hooks/iugucc_hooks_loader.php`.

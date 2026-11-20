@@ -300,6 +300,22 @@
                                 panelLink.className = 'btn btn-success btn-sm';
                                 panelLink.textContent = i18n.access_panel_button || 'Acessar Painel do Serviço';
                                 actionWrap.appendChild(panelLink);
+
+                                var sp = result.service_panel || {};
+                                var siteAdminUrl = result.admin_url || sp.admin_url || result.wp_admin_url || sp.wp_admin_url || '';
+                                if (siteAdminUrl) {
+                                    var panelType = result.panel_type || sp.panel_type || '';
+                                    var siteAdminLink = document.createElement('a');
+                                    siteAdminLink.href = String(siteAdminUrl);
+                                    siteAdminLink.target = '_blank';
+                                    siteAdminLink.rel = 'noopener noreferrer';
+                                    siteAdminLink.className = 'btn btn-default btn-sm';
+                                    siteAdminLink.style.marginLeft = '8px';
+                                    siteAdminLink.textContent = (panelType === 'imovelsitenext')
+                                        ? (i18n.success_btn_site_admin || 'Acessar Painel do Site')
+                                        : (i18n.success_btn_wp_admin || 'Acessar Painel do Site (WP-Admin)');
+                                    actionWrap.appendChild(siteAdminLink);
+                                }
                                 alertBox.appendChild(actionWrap);
                             }
                             var targetUrl = result.redirect_url || config.invoiceReturnUrl || ('viewinvoice.php?id=' + encodeURIComponent(config.invoiceId) + '&paymentsuccess=true');

@@ -86,6 +86,17 @@ final class WebhookHandler
         $webhookAccountId = trim((string) ($data['account_id'] ?? $payload['data_account_id'] ?? ''));
 
         if ($iuguInvoiceId === '') {
+            if ($event !== '' && !str_starts_with(strtolower($event), 'invoice.')) {
+                return [
+                    'http_code' => 200,
+                    'processed' => false,
+                    'action' => 'ignored_non_invoice_event',
+                    'whmcs_invoice_id' => '',
+                    'iugu_invoice_id' => '',
+                    'message' => 'Non-invoice event ignored safely.',
+                ];
+            }
+
             return [
                 'http_code' => 400,
                 'processed' => false,
